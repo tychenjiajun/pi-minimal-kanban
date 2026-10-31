@@ -1,5 +1,9 @@
 # pi-minimal-kanban
 
+[![CI](https://github.com/tychenjiajun/pi-minimal-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/tychenjiajun/pi-minimal-kanban/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![pi extension](https://img.shields.io/badge/pi-extension-7c3aed.svg)](https://pi.dev/docs/latest/extensions)
+
 A small, file-backed Kanban board for [Pi](https://pi.dev) agents. It lets
 several agents (and the humans driving them) share one project's work without
 stepping on each other.
@@ -25,6 +29,10 @@ Or load it from a checkout while developing:
 ```bash
 pi --extension ./src/index.ts
 ```
+
+A running session keeps the code it loaded at start-up: after editing the
+extension, `/reload` or restart before judging a change from the tools. Tests
+and direct module calls always see the working tree.
 
 ## Quick start
 
