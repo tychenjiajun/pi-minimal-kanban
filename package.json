@@ -1,0 +1,58 @@
+{
+  "name": "pi-minimal-kanban",
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Minimal file-backed Kanban for Pi agents: project-specific workflows, exclusive task claims, and a read-only /kanban view.",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "kanban",
+    "task-board",
+    "multi-agent",
+    "agent-coordination",
+    "workflow",
+    "yaml",
+    "markdown",
+    "files"
+  ],
+  "license": "MIT",
+  "files": [
+    "src/**/*.ts",
+    "!src/test/**",
+    "docs/**",
+    "GLOSSARY.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@sinclair/typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.4.0",
+    "@sinclair/typebox": "^0.34.52",
+    "@types/node": "^22.10.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  },
+  "packageManager": "pnpm@12.6.0"
+}

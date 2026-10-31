@@ -1,0 +1,29 @@
+name: extension delivery
+initial: new
+
+statuses:
+  - id: new
+    label: New
+  - id: planning
+    label: Planning
+    active: true
+  - id: building
+    label: Building
+    active: true
+  - id: reviewing
+    label: Reviewing
+    active: true
+  - id: testing
+    label: Testing
+    active: true
+  - id: done
+    label: Done
+    terminal: true
+
+transitions:
+  new: [planning]
+  planning: [new, building]
+  building: [planning, reviewing]
+  reviewing: [building, testing]
+  testing: [reviewing, done]
+  done: [testing]
