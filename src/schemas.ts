@@ -21,6 +21,15 @@ const ExpectedRev = Type.Optional(
 
 const TaskId = Type.String({ description: "Task id, e.g. T-0001." });
 
+// No `maxLength`: the store's own messages (`reason is 201 characters; the
+// limit is 200.`) must reach the agent, not a harness schema error (design §1.3).
+const Reason = Type.Optional(
+  Type.String({
+    minLength: 1,
+    description: "Why the takeover happened. Requires `force: true`; stored on the history entry.",
+  }),
+);
+
 const WorkflowStatus = Type.Object({
   id: Type.String(),
   label: Type.String(),
@@ -50,6 +59,7 @@ const HistoryEntry = Type.Object({
   to: Type.Optional(Type.String()),
   assignee: Type.Optional(Type.String()),
   forced: Type.Optional(Type.Boolean()),
+  reason: Type.Optional(Type.String()),
 });
 
 const Comment = Type.Object({
@@ -117,6 +127,7 @@ export const MoveParams = Type.Object({
         "Take over a claim held by another handle. Only for a task whose owner has stopped working on it.",
     }),
   ),
+  reason: Reason,
   expectedRev: ExpectedRev,
   project: Project,
 });
@@ -133,12 +144,17 @@ export const MoveOutput = Type.Object({
 export const AssignParams = Type.Object({
   task: TaskId,
   assignee: Type.Union([Type.String({ minLength: 1, maxLength: 64 }), Type.Null()], {
-    description: "Handle to assign, or null to release. Exactly one handle may hold a task.",
+    description:
+      "Handle to assign, or null to release. Exactly one handle may hold a task; assigning it to a handle other than your own needs `force: true`.",
   }),
   agent: Agent,
   force: Type.Optional(
-    Type.Boolean({ description: "Take the task from, or release, another handle's claim." }),
+    Type.Boolean({
+      description:
+        "Take the task from, or release, another handle's claim, or assign it to a handle that is not yours. Recorded as a forced assignment.",
+    }),
   ),
+  reason: Reason,
   expectedRev: ExpectedRev,
   project: Project,
 });

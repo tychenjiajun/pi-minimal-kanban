@@ -91,3 +91,56 @@ task cannot be assigned until it is moved back.
 
 A workflow without `active` statuses is valid — every task stays unassigned and
 coordination happens through explicit `kanban_assign` calls.
+
+## Assignment needs `force` when it is not yours
+
+`kanban_assign` requires `force: true` whenever the target assignee is not the
+caller's own handle: assigning an unassigned task to a third handle, handing
+your own task to somebody else, and taking or clearing another handle's
+assignment all need it. The write is then recorded as `force-assign` +
+`forced: true`, distinguishable from a self-claim's plain `assign`; without
+`force` it fails with `wrong_owner` and writes nothing. Moving a task into an
+`active` status still claims it for the caller with no flag, because the new
+assignee is the caller. ADR: `docs/adr/0009-third-party-assignment-is-forced.md`.
+
+## Repairing task ids after a merge
+
+Boards are committed, so a `counter.json` merge conflict is resolved by hand
+(ADR 0005). Two things can come out of that, and without a repair path nothing
+but a hand edit fixes them: a task file whose frontmatter `id` no longer matches
+its filename (`/kanban validate` reports `id_mismatch`), and a counter that is
+not greater than the highest existing id (`counter_low`).
+
+`/kanban repair-ids` fixes exactly those two codes and nothing else.
+
+- **The filename is the identity.** A file whose frontmatter declares
+  `id: T-0009` is renamed to `T-0009.md`; the reverse repair is refused, because
+  ADR 0005 makes an issued id permanent and overwriting it would discard an id
+  that can never be reissued.
+- **The counter only goes up.** It is raised to `highest + 1` when it is at or
+  below the highest id, and otherwise left byte-identical.
+- **The plan is re-computed under the board lock.** `--yes` does not apply the
+  plan it printed; it takes the lock, re-plans, and applies that.
+- **Two rename passes.** Sources move to `.repair.<token>.md` first, then to
+  their targets, so a swap (`T-0002 -> T-0005` with `T-0005 -> T-0002`) and a
+  chain both apply without colliding. A crash between the passes leaves no task
+  with a wrong id, only a file no tool reads — and the next run lists it as
+  `interrupted repair: restore or delete by hand`.
+- **Prose is never rewritten.** A `T-0007` in a description or a comment stays
+  as written. Neither are `rev`, `updated`, or the history: a rename is not
+  task activity.
+- **Ambiguity is refused.** `--dry-run --yes` together, two files declaring one
+  id, and a target that already exists all print a refusal and write nothing. A
+  file with no string `id` is skipped and listed, and the rest still applies.
+
+Nothing here fixes `drifted`, `terminal_assigned`, `stale_claim`,
+`unannotated_forced`, or an unreadable task file.
+
+## Takeovers and their reasons
+
+`kanban_assign` and `kanban_move` accept `reason` together with `force: true`.
+It is recorded on the one forced history entry, must be a single line of 1-200
+characters, and says why the claim changed hands. A `reason` without `force` is
+an `invalid_argument` error: an annotation on a write that took nothing over
+would be a false record. A takeover recorded without one stays valid, and
+`/kanban validate` reports it once per task as a `unannotated_forced` warning.

@@ -152,9 +152,9 @@ A Forced assignment records `forced: true` and nothing else
 a takeover. History is already documented as self-reported (`GLOSSARY.md`:71-73),
 so a recorded reason is an improvement in legibility, not in trust.
 
-- [ ] `kanban_assign` and `kanban_move` accept an optional `reason` when `force` is true.
-- [ ] History entries for Forced assignments render the reason in `/kanban <task-id>`.
-- [ ] A Forced assignment without a reason is accepted but flagged in `validate` as unannotated.
+- [x] `kanban_assign` and `kanban_move` accept an optional `reason` when `force` is true.
+- [x] History entries for Forced assignments render the reason in `/kanban <task-id>`.
+- [x] A Forced assignment without a reason is accepted but flagged in `validate` as unannotated.
 
 ### 10. Stop silent third-party assignment
 
@@ -163,9 +163,9 @@ Handle without `force` (`src/store.ts:483-488`), recording a normal `assign`
 entry. Setting an Assignee for someone else is a coordination act that the owner
 never consented to, and the Board cannot express the difference.
 
-- [ ] Assigning a Task to a Handle other than the caller's requires `force`.
-- [ ] The tool description and `promptGuidelines` state the rule in one sentence.
-- [ ] The resulting History entry is distinguishable from a self-claim.
+- [x] Assigning a Task to a Handle other than the caller's requires `force`.
+- [x] The tool description and `promptGuidelines` state the rule in one sentence.
+- [x] The resulting History entry is distinguishable from a self-claim.
 
 ### 11. Remove the unlocked read in `kanban_move`
 
@@ -185,9 +185,9 @@ the Board lock.
 (`src/command.ts:167-180`), so `/kanban mine <handle>` and `/kanban <task-id>`
 require recall. `/kanban help` (`src/command.ts:27-37`) states no rules.
 
-- [ ] Completions include Task IDs (with Status and title) and observed Handles.
-- [ ] `/kanban help` states the Claim rule, the Terminal-status rule, and the Handle convention.
-- [ ] A test asserts completions include a Task ID present on the Board.
+- [x] Completions include Task IDs (with Status and title) and observed Handles.
+- [x] `/kanban help` states the Claim rule, the Terminal-status rule, and the Handle convention.
+- [x] A test asserts completions include a Task ID present on the Board.
 
 ### 13. Detect duplicate Task IDs after a merge
 
@@ -195,6 +195,6 @@ Boards are committed and merge conflicts on `counter.json` are resolved by hand
 (`docs/adr/0005`:5, `README.md`:96-97). A renumbering mistake leaves a Task ID
 that is referenced in conversation but no longer matches, and nothing detects it.
 
-- [ ] `/kanban validate` reports a Task whose `id` frontmatter does not match its filename.
-- [ ] `validate` reports a `counter.json` value that is not greater than the highest existing Task ID.
-- [ ] `/kanban repair-ids --dry-run` lists the renumbering it would perform.
+- [x] `/kanban validate` reports a Task whose `id` frontmatter does not match its filename.
+- [x] `validate` reports a `counter.json` value that is not greater than the highest existing Task ID.
+- [x] `/kanban repair-ids --dry-run` lists the renumbering it would perform.

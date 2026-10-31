@@ -156,7 +156,7 @@ describe("assignTask", () => {
     const board = makeBoard();
     const task = await createTask(board, { title: "x", agent: "a" });
 
-    const assigned = await assignTask(board, { task: task.id, assignee: "coder-2", agent: "a" });
+    const assigned = await assignTask(board, { task: task.id, assignee: "coder-2", agent: "coder-2" });
     expect(assigned.assignee).toBe("coder-2");
 
     const released = await assignTask(board, { task: task.id, assignee: null, agent: "coder-2" });
@@ -167,7 +167,7 @@ describe("assignTask", () => {
   it("requires force to take a claimed task", async () => {
     const board = makeBoard();
     const task = await createTask(board, { title: "x", agent: "a" });
-    await assignTask(board, { task: task.id, assignee: "coder-1", agent: "a" });
+    await assignTask(board, { task: task.id, assignee: "coder-1", agent: "coder-1" });
 
     await expectCode(assignTask(board, { task: task.id, assignee: "coder-2", agent: "coder-2" }), "already_assigned");
     const forced = await assignTask(board, { task: task.id, assignee: "coder-2", agent: "coder-2", force: true });
@@ -178,7 +178,7 @@ describe("assignTask", () => {
   it("requires force to release someone else's claim", async () => {
     const board = makeBoard();
     const task = await createTask(board, { title: "x", agent: "a" });
-    await assignTask(board, { task: task.id, assignee: "coder-1", agent: "a" });
+    await assignTask(board, { task: task.id, assignee: "coder-1", agent: "coder-1" });
 
     await expectCode(assignTask(board, { task: task.id, assignee: null, agent: "coder-2" }), "wrong_owner");
     const released = await assignTask(board, { task: task.id, assignee: null, agent: "coder-2", force: true });
@@ -197,8 +197,8 @@ describe("assignTask", () => {
   it("is a no-op when the assignee already matches", async () => {
     const board = makeBoard();
     const task = await createTask(board, { title: "x", agent: "a" });
-    await assignTask(board, { task: task.id, assignee: "b", agent: "a" });
-    const again = await assignTask(board, { task: task.id, assignee: "b", agent: "a" });
+    await assignTask(board, { task: task.id, assignee: "b", agent: "b" });
+    const again = await assignTask(board, { task: task.id, assignee: "b", agent: "b" });
     expect(again.rev).toBe(2);
   });
 });

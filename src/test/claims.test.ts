@@ -5,19 +5,20 @@
  * one human-initiated exception to "the command never edits the board".
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import kanbanExtension, { failureEnvelope } from "../index.ts";
-import { handleKanbanCommand, renderValidationReport } from "../command.ts";
-import { createTask, moveTask, readBoard, readTask, validateBoard, releaseTask } from "../store.ts";
+import { USAGE, handleKanbanCommand, renderValidationReport } from "../command.ts";
+import { assignTask, createTask, moveTask, readBoard, readTask, validateBoard, releaseTask } from "../store.ts";
 import { renderBoard, renderTask, renderTaskRows } from "../render.ts";
 import type { Task } from "../types.ts";
-import { makeBoard } from "./helpers.ts";
+import { makeBoard, taskFile } from "./helpers.ts";
 import type { BoardLocation } from "../paths.ts";
 
 interface RegisteredTool {
   name: string;
+  promptGuidelines?: string[];
   execute: (id: string, params: unknown, signal: undefined, onUpdate: undefined, ctx: unknown) => Promise<unknown>;
 }
 
@@ -26,6 +27,7 @@ function loadTools(): Map<string, RegisteredTool> {
   const pi = {
     registerTool: (tool: RegisteredTool) => tools.set(tool.name, tool),
     registerCommand: () => undefined,
+    on: () => () => undefined,
     events: { emit: () => undefined, on: () => () => undefined },
   } as unknown as ExtensionAPI;
   kanbanExtension(pi);
@@ -261,5 +263,148 @@ describe("/kanban release", () => {
     const released = await releaseTask(board, { task: id, agent: "human" }, { now: () => new Date("2026-10-04T00:00:00.000Z") });
     expect(released.assignee).toBeUndefined();
     expect(released.history.at(-1)?.forced).toBe(true);
+  });
+});
+
+/**
+ * T-0013 (backlog #10, ADR 0009): any write to an assignee that is not your own
+ * handle needs `force`, in both directions. The takeover entry stays the
+ * distinguishable `force-assign` + `forced: true`; a self-claim stays `assign`.
+ */
+describe("third-party assignment is forced", () => {
+  /** An unassigned board with `count` tasks; returns the id of the last one. */
+  async function boardWith(count: number): Promise<{ board: BoardLocation; id: string }> {
+    const board = makeBoard();
+    let id = "";
+    for (let index = 0; index < count; index += 1) {
+      id = (await createTask(board, { title: `task ${index + 1}`, agent: "coder-3" })).id;
+    }
+    return { board, id };
+  }
+
+  async function envelopeOf(board: BoardLocation, params: Record<string, unknown>) {
+    const tools = loadTools();
+    const result = (await tools.get("kanban_assign")!.execute("call", { project: board.root, ...params }, undefined, undefined, {
+      cwd: board.root,
+    } as unknown as ExtensionCommandContext)) as {
+      content: Array<{ text: string }>;
+      structuredContent?: Record<string, unknown>;
+      isError?: boolean;
+    };
+    return result;
+  }
+
+  it("refuses T-0002 to coder-2 without force, names force, and writes nothing", async () => {
+    const { board } = await boardWith(2);
+    const path = join(board.tasksDir, "T-0002.md");
+    const before = readFileSync(path, "utf8");
+
+    const result = await envelopeOf(board, { task: "T-0002", assignee: "coder-2", agent: "coder-1" });
+    const envelope = result.structuredContent ?? {};
+
+    expect(result.isError).toBe(true);
+    expect(envelope.code).toBe("wrong_owner");
+    expect(envelope.error).toBe(
+      'Task T-0002 is unassigned; "coder-1" cannot assign it to "coder-2" without force.',
+    );
+    expect(envelope.hint).toContain("force: true");
+    // §2.2's structuredContent: the target handle and the caller, not the holder.
+    expect(envelope.task).toBe("T-0002");
+    expect(envelope.assignee).toBe("coder-2");
+    expect(envelope.agent).toBe("coder-1");
+
+    expect(readFileSync(path, "utf8")).toBe(before);
+    expect(existsSync(join(board.dir, ".lock"))).toBe(false);
+  });
+
+  it("accepts the same call with force and records force-assign + forced", async () => {
+    const { board } = await boardWith(2);
+    await assignTask(board, { task: "T-0002", assignee: "coder-2", agent: "coder-1", force: true });
+
+    const last = readTask(board, "T-0002").history.at(-1);
+    expect(last).toMatchObject({ action: "force-assign", by: "coder-1", assignee: "coder-2", forced: true });
+  });
+
+  it("lets a caller claim an unassigned task for itself with no force", async () => {
+    const { board } = await boardWith(1);
+
+    const task = await assignTask(board, { task: "T-0001", assignee: "coder-1", agent: "coder-1" });
+
+    expect(task.assignee).toBe("coder-1");
+    expect(task.history.at(-1)).toMatchObject({ action: "assign", by: "coder-1", assignee: "coder-1" });
+    expect(task.history.at(-1)?.forced).toBeUndefined();
+  });
+
+  it("writes nothing when the assignee already matches, even for another handle", async () => {
+    // No-op stays before the new check: a retried third-party call is idempotent.
+    const board = makeBoard();
+    const created = await createTask(board, { title: "x", agent: "coder-1" });
+    await assignTask(board, { task: created.id, assignee: "coder-2", agent: "coder-1", force: true });
+    const before = readFileSync(join(board.tasksDir, `${created.id}.md`), "utf8");
+
+    const again = await assignTask(board, { task: created.id, assignee: "coder-2", agent: "coder-1" });
+
+    expect(again.rev).toBe(2);
+    expect(readFileSync(join(board.tasksDir, `${created.id}.md`), "utf8")).toBe(before);
+  });
+
+  it("refuses handing your own task to another handle without force", async () => {
+    const { board } = await boardWith(1);
+    await assignTask(board, { task: "T-0001", assignee: "coder-1", agent: "coder-1" });
+
+    let error: unknown;
+    try {
+      await assignTask(board, { task: "T-0001", assignee: "coder-2", agent: "coder-1" });
+    } catch (caught) {
+      error = caught;
+    }
+    const envelope = failureEnvelope(error, {}, board.root);
+    expect(envelope.code).toBe("wrong_owner");
+    expect(envelope.error).toBe(
+      'Task T-0001 is assigned to "coder-1"; "coder-1" cannot assign it to "coder-2" without force.',
+    );
+    // The holder here is the caller, so the hint cannot name a release.
+    expect(envelope.hint).not.toContain("/kanban release");
+    expect(readTask(board, "T-0001").assignee).toBe("coder-1");
+  });
+
+  it("keeps the implicit claim-on-move free of force", async () => {
+    const { board } = await boardWith(1);
+
+    const moved = await moveTask(board, { task: "T-0001", to: "working", agent: "coder-1" });
+
+    expect(moved.assignee).toBe("coder-1");
+    expect(moved.history.at(-1)).toMatchObject({ action: "assign", by: "coder-1", assignee: "coder-1" });
+  });
+
+  it("keeps a historic third-party assign entry valid", () => {
+    const board = makeBoard();
+    taskFile(
+      board,
+      "T-0001",
+      `---\nid: T-0001\ntitle: Handed over under 0.2.0\nstatus: new\nassignee: coder-2\ncreated: 2026-10-30T09:00:00.000Z\nupdated: 2026-10-30T09:00:00.000Z\nrev: 2\nhistory:\n  - at: 2026-10-30T09:00:00.000Z\n    action: create\n    by: coder-1\n    to: new\n  - at: 2026-10-30T09:00:00.000Z\n    action: assign\n    by: coder-1\n    assignee: coder-2\n---\n`,
+    );
+
+    const report = validateBoard(board, { staleAfterMs: 0 });
+    expect(report.ok).toBe(true);
+    expect(report.problems).toEqual([]);
+    expect(readTask(board, "T-0001").history.at(-1)).toMatchObject({ action: "assign", assignee: "coder-2" });
+  });
+
+  it("states the rule in USAGE and in kanban_assign's guidelines", () => {
+    expect(USAGE).toContain("Assigning a task to another handle needs force: true");
+
+    const guidelines = loadTools().get("kanban_assign")!.promptGuidelines?.join(" ") ?? "";
+    expect(guidelines).toContain("history then records a forced assignment");
+    expect(guidelines).toContain("expectedRev");
+  });
+
+  it("ships ADR 0009 and references it from the ADR set and the README", () => {
+    const adr = readFileSync(new URL("../../docs/adr/0009-third-party-assignment-is-forced.md", import.meta.url), "utf8");
+    expect(adr).toContain("# Third-party assignment is forced");
+    expect(adr).toContain("wrong_owner");
+
+    expect(readFileSync(new URL("../../docs/adr/0004-assignment-is-exclusive-and-stealing-is-explicit.md", import.meta.url), "utf8")).toContain("0009");
+    expect(readFileSync(new URL("../../README.md", import.meta.url), "utf8")).toContain("0009");
   });
 });

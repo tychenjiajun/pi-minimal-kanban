@@ -9,6 +9,8 @@ export interface HistoryEntry {
   assignee?: string;
   /** True when this action replaced another handle's assignment. */
   forced?: boolean;
+  /** Why the takeover happened; only a forced write can carry one (ADR 0009, T-0012). */
+  reason?: string;
 }
 
 export interface Comment {

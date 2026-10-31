@@ -17,8 +17,10 @@ const MIN_TITLE_WIDTH = 15;
 const MAX_STATUS_WIDTH = 16;
 const MAX_META_WIDTH = 17;
 const MAX_REV_WIDTH = 6;
+/** A reason line is `      why  ` + 65 characters, i.e. the 76-column budget. */
+const REASON_WIDTH = 65;
 
-function truncate(text: string, limit: number): string {
+export function truncate(text: string, limit: number): string {
   if (text.length <= limit) return text;
   // No dangling space before the dots: it reads as a gap, not as a cut.
   return `${text.slice(0, Math.max(0, limit - 3)).replace(/ +$/, "")}...`;
@@ -258,6 +260,9 @@ export function renderTask(task: Task, workflow: Workflow | null, options: Rende
                 ? ` ${entry.assignee ?? ""}`
                 : ` ${entry.to ?? ""}`;
       lines.push(`    ${when}${who}  ${entry.action}${detail}`.replace(/\s+$/, ""));
+      // A reason prints on its own line so it can never shift the columns
+      // above; a long one is truncated, never wrapped (design §1.4).
+      if (entry.reason) lines.push(`      why  ${truncate(entry.reason, REASON_WIDTH)}`);
     }
   }
 

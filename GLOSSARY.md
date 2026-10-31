@@ -53,7 +53,7 @@ A status in which work is happening. Entering one claims the task for the caller
 _Avoid_: In-progress column, started
 
 **Forced assignment**:
-An assignment that replaces another handle's existing assignment on the same task.
+An assignment that replaces another handle's existing assignment on the same task, or that names a handle other than the caller's own. Any write to an assignee that is not yours requires `force` and is recorded as a forced assignment ([ADR 0009](docs/adr/0009-third-party-assignment-is-forced.md)).
 _Avoid_: Steal, takeover
 
 **Agent**:

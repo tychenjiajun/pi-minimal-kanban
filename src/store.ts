@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, renameSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { KanbanError } from "./errors.ts";
 import { atomicWrite, ensureDir, readText, withBoardLock } from "./fs.ts";
@@ -13,6 +14,7 @@ const TASK_FILE = /^T-(\d{4,})\.md$/;
 const MAX_TITLE = 200;
 const MAX_COMMENT = 20_000;
 const MAX_DESCRIPTION = 200_000;
+const MAX_REASON = 200;
 
 export interface Clock {
   now(): Date;
@@ -169,6 +171,9 @@ function parseHistory(value: unknown): HistoryEntry[] {
       to: typeof raw.to === "string" ? raw.to : undefined,
       assignee: typeof raw.assignee === "string" ? raw.assignee : undefined,
       forced: raw.forced === true ? true : undefined,
+      // Last key, and only when non-empty, so a file without a reason
+      // re-serializes byte for byte (design §1.1).
+      reason: typeof raw.reason === "string" && raw.reason.trim() ? raw.reason : undefined,
     });
   }
   return entries;
@@ -348,6 +353,42 @@ function claimedFor(task: Task, clock: Clock): string {
   return ` for ${formatAge(claimAgeMs(task, clock.now()))}`;
 }
 
+/**
+ * Trim and validate a takeover reason (design §1.3). The caller must already
+ * have asked for `force`: an annotation without a takeover would be a false
+ * record, so the flag is required before anything reaches the file.
+ */
+export function normalizeReason(reason: string, force: boolean | undefined): string {
+  if (!force) {
+    throw new KanbanError("invalid_argument", "reason requires force: true.");
+  }
+  const text = reason.trim();
+  if (text.length === 0) {
+    throw new KanbanError("invalid_argument", "reason must be 1-200 characters.");
+  }
+  if (/[\u0000-\u001f\u007f]/.test(text)) {
+    throw new KanbanError("invalid_argument", "reason must be a single line.");
+  }
+  if (text.length > MAX_REASON) {
+    throw new KanbanError(
+      "invalid_argument",
+      `reason is ${text.length} characters; the limit is ${MAX_REASON}.`,
+    );
+  }
+  return text;
+}
+
+/**
+ * Attach the reason to exactly one appended entry: the first forced entry, or
+ * the first entry when the call wrote no takeover (design §1.2).
+ */
+function attachReason(history: HistoryEntry[], reason: string | undefined): HistoryEntry[] {
+  if (!reason || history.length === 0) return history;
+  const forced = history.findIndex((entry) => entry.forced === true);
+  const target = forced === -1 ? 0 : forced;
+  return history.map((entry, index) => (index === target ? { ...entry, reason } : entry));
+}
+
 // ─── Mutations ───────────────────────────────────────────────────────────────
 
 export interface CreateInput {
@@ -412,6 +453,7 @@ export interface MoveInput {
   to: string;
   agent: string;
   force?: boolean;
+  reason?: string;
   expectedRev?: number;
 }
 
@@ -439,6 +481,8 @@ export async function moveTask(
   const agent = assertHandle(input.agent);
   const id = assertTaskId(input.task);
   const to = (input.to ?? "").trim();
+  // Argument errors win over board-state errors, and neither takes the lock.
+  const reason = input.reason === undefined ? undefined : normalizeReason(input.reason, input.force);
 
   return withBoardLock(join(location.dir, FILES.lock), () => {
     const workflow = readWorkflow(location.dir);
@@ -521,7 +565,7 @@ export async function moveTask(
       assignee,
       updated: at,
       rev: task.rev + 1,
-      history: [...task.history, ...history],
+      history: [...task.history, ...attachReason(history, reason)],
       drifted: false,
     };
     writeTask(next);
@@ -534,14 +578,16 @@ export interface AssignInput {
   assignee: string | null;
   agent: string;
   force?: boolean;
+  reason?: string;
   expectedRev?: number;
 }
 
 /**
  * Set or clear the single assignee.
  *
- * Taking a task from another handle, or clearing their assignment, requires
- * `force`. Releasing your own assignment does not.
+ * Any write to an assignee that is not the caller's own handle needs `force`,
+ * in both directions: taking another handle's task, and assigning a task to a
+ * third handle (ADR 0009). Releasing your own assignment does not.
  */
 export async function assignTask(
   location: BoardLocation,
@@ -551,6 +597,8 @@ export async function assignTask(
   const agent = assertHandle(input.agent);
   const id = assertTaskId(input.task);
   const wanted = input.assignee === null || input.assignee === undefined ? null : assertHandle(input.assignee, "assignee");
+  // Argument errors win over board-state errors, and neither takes the lock.
+  const reason = input.reason === undefined ? undefined : normalizeReason(input.reason, input.force);
 
   return withBoardLock(join(location.dir, FILES.lock), () => {
     const workflow = readWorkflow(location.dir);
@@ -574,7 +622,24 @@ export async function assignTask(
 
     const now = clock.now();
     const at = now.toISOString();
-    const history: HistoryEntry[] = [];
+    // A new entry receives the reason unless it is a deliberate release of your
+    // own assignment: `reason` annotates a forced write, and an `unassign` can
+    // never be one here (design §1.2).
+    const newHistory: HistoryEntry[] = [];
+
+    // Writing another handle's name is a coordination act, not a self-claim, so
+    // it is deliberate whatever the task held before (ADR 0009, design §2.1).
+    // The no-op above stays first, so a retried call is still idempotent.
+    if (wanted !== null && wanted !== agent && !input.force) {
+      throw new KanbanError(
+        "wrong_owner",
+        current
+          ? `Task ${id} is assigned to "${current}"; "${agent}" cannot assign it to "${wanted}" without force.`
+          : `Task ${id} is unassigned; "${agent}" cannot assign it to "${wanted}" without force.`,
+        `Pass force: true to make this assignment; history records it as a forced assignment by "${agent}".`,
+        { task: id, assignee: wanted, agent },
+      );
+    }
 
     if (wanted === null) {
       if (current && current !== agent && !input.force) {
@@ -585,7 +650,7 @@ export async function assignTask(
           { task: id, assignee: current, agent },
         );
       }
-      history.push({ at, action: "unassign", by: agent, assignee: current ?? undefined, ...(current && current !== agent ? { forced: true } : {}) });
+      newHistory.push({ at, action: "unassign", by: agent, assignee: current ?? undefined, ...(current && current !== agent ? { forced: true } : {}) });
     } else if (current && current !== agent && !input.force) {
       throw new KanbanError(
         "already_assigned",
@@ -593,18 +658,22 @@ export async function assignTask(
         releaseHint(task, agent),
         { task: id, assignee: current, agent },
       );
-    } else if (current && current !== wanted && input.force) {
-      history.push({ at, action: "force-assign", by: agent, assignee: wanted, forced: true });
+    } else if (input.force && (wanted !== agent || Boolean(current && current !== wanted))) {
+      // A forced write is a takeover when it takes someone else's task and a
+      // third-party assignment when it names another handle; both record the
+      // same distinguishable entry (design §2.1).
+      newHistory.push({ at, action: "force-assign", by: agent, assignee: wanted, forced: true });
     } else {
-      history.push({ at, action: "assign", by: agent, assignee: wanted });
+      newHistory.push({ at, action: "assign", by: agent, assignee: wanted });
     }
 
+    const annotated = newHistory[0]?.action === "unassign" ? newHistory : attachReason(newHistory, reason);
     const next: Task = {
       ...task,
       assignee: wanted ?? undefined,
       updated: at,
       rev: task.rev + 1,
-      history: [...task.history, ...history],
+      history: [...task.history, ...annotated],
     };
     writeTask(next);
     return withClaimAge(next, workflow, clock);
@@ -765,7 +834,7 @@ export interface ValidationReport {
 }
 
 /** The raw `counter.json` value, or undefined when the file is absent or invalid. */
-function readCounterValue(location: BoardLocation): number | undefined {
+export function readCounterValue(location: BoardLocation): number | undefined {
   const path = join(location.dir, FILES.counter);
   if (!existsSync(path)) return undefined;
   try {
@@ -804,6 +873,25 @@ function staleClaimProblem(
     severity: "warning",
     message,
   };
+}
+
+/**
+ * An `unannotated_forced` warning, or undefined when every takeover has a
+ * reason. One finding per task, not per entry, so a board cannot flood the
+ * report (design §1.6).
+ */
+function unannotatedForcedProblem(task: Task): ValidationProblem | undefined {
+  const unannotated = task.history.filter((entry) => entry.action === "force-assign" && !entry.reason?.trim());
+  if (unannotated.length === 0) return undefined;
+  const first = unannotated[0];
+  const who = first.by ?? "-";
+  const date = first.at.slice(0, 10);
+  const advice = `Add one next time with kanban_assign {force: true, reason: "..."}.`;
+  const message =
+    unannotated.length === 1
+      ? `Forced assignment by "${who}" on ${date} has no reason. ${advice}`
+      : `${unannotated.length} forced assignments have no reason; the first is by "${who}" on ${date}. ${advice}`;
+  return { task: task.id, code: "unannotated_forced", severity: "warning", message };
 }
 
 /**
@@ -868,6 +956,9 @@ export function validateBoard(
     }
     const stale = staleClaimProblem(task, workflow, options.staleAfterMs, clock);
     if (stale) problems.push(stale);
+    // After `stale_claim`, matching the order design §1.6 fixes.
+    const unannotated = unannotatedForcedProblem(task);
+    if (unannotated) problems.push(unannotated);
   }
 
   // A counter at or below the highest issued id silently hands out a live id.
@@ -888,6 +979,187 @@ export function validateBoard(
     workflowErrors: workflowResult.errors,
     problems,
   };
+}
+
+// ─── ID repair ────────────────────────────────────────────────────────────────
+
+/** One rename `repair-ids` would make, from the filename to the declared id. */
+export interface IdRepair {
+  filenameId: string;
+  declaredId: string;
+  path: string;
+  target: string;
+}
+
+export interface RepairPlan {
+  dir: string;
+  /** filenameId ascending. */
+  renames: IdRepair[];
+  counter?: { from: number; to: number };
+  skipped: Array<{ path: string; message: string }>;
+}
+
+/** What `repair-ids` refuses to do, and why. Rendered by `src/command.ts`. */
+export type RepairRefusal =
+  | { kind: "duplicate"; entries: Array<{ filename: string; declaredId: string }> }
+  | { kind: "target_exists"; entry: { filename: string; declaredId: string; existing: string } };
+
+/** Files an interrupted run left behind; never a task, so they are surfaced. */
+const REPAIR_TEMP = /^\.repair\..*\.md$/;
+
+/** The frontmatter `id`, or the reason it cannot be used (design §5.1). */
+function readDeclaredId(path: string): { declaredId?: string; problem?: string } {
+  let text: string;
+  try {
+    text = readText(path);
+  } catch {
+    return { problem: "cannot be read" };
+  }
+  let frontmatter: Record<string, unknown>;
+  try {
+    frontmatter = parseTaskFile(text, path).frontmatter;
+  } catch {
+    return { problem: "not a readable task file" };
+  }
+  const id = frontmatter.id;
+  if (typeof id !== "string") return { problem: `no string "id" in frontmatter` };
+  return { declaredId: id };
+}
+
+/** `.repair.<token>.<filenameId>.md` files a crashed run left in `tasks/`. */
+function leftoverRepairs(location: BoardLocation): string[] {
+  try {
+    return readdirSync(location.tasksDir).filter((name) => REPAIR_TEMP.test(name)).sort();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The highest id on the board once the plan is applied: the filenames that
+ * exist plus the ids the plan renames to.
+ */
+function highestPlannedId(location: BoardLocation, renames: IdRepair[]): number {
+  const ids = [
+    ...listTaskIds(location).map((id) => Number(id.slice(2))),
+    ...renames.map((rename) => Number(rename.declaredId.slice(2))),
+  ];
+  return ids.length > 0 ? Math.max(...ids) : 0;
+}
+
+/**
+ * Compute the repair plan. Read only: it takes no board lock, like `validate`
+ * (design §5.1). The filename is the identity source of truth, and a file whose
+ * frontmatter `id` differs is repaired **to** the declared id.
+ */
+export function planRepairIds(location: BoardLocation): RepairPlan {
+  const skipped: RepairPlan["skipped"] = [];
+  const renames: IdRepair[] = [];
+
+  for (const filenameId of listTaskIds(location)) {
+    const path = taskPath(location, filenameId);
+    const { declaredId, problem } = readDeclaredId(path);
+    if (declaredId === undefined) {
+      skipped.push({ path, message: problem ?? `no string "id" in frontmatter` });
+      continue;
+    }
+    // A non-canonical id cannot become a filename any tool reads, so it needs a
+    // hand edit rather than a rename that would hide the task.
+    if (!isTaskId(declaredId)) {
+      skipped.push({ path, message: `invalid id "${declaredId}" in frontmatter` });
+      continue;
+    }
+    if (declaredId === filenameId) continue;
+    renames.push({
+      filenameId,
+      declaredId,
+      path,
+      target: join(location.tasksDir, taskFileName(declaredId)),
+    });
+  }
+
+  for (const name of leftoverRepairs(location)) {
+    skipped.push({ path: join(location.tasksDir, name), message: "interrupted repair: restore or delete by hand" });
+  }
+
+  const highest = highestPlannedId(location, renames);
+  const from = readCounter(location);
+  return {
+    dir: location.dir,
+    renames,
+    counter: from <= highest ? { from, to: highest + 1 } : undefined,
+    skipped,
+  };
+}
+
+/**
+ * A refusal the plan cannot be applied through: two files declaring one id, or
+ * a rename target that exists and is not itself moving away (design §5.4).
+ */
+export function repairRefusal(plan: RepairPlan): RepairRefusal | undefined {
+  const byTarget = new Map<string, IdRepair[]>();
+  for (const rename of plan.renames) {
+    const group = byTarget.get(rename.target) ?? [];
+    group.push(rename);
+    byTarget.set(rename.target, group);
+  }
+  for (const group of byTarget.values()) {
+    if (group.length > 1) {
+      return {
+        kind: "duplicate",
+        entries: group.map((rename) => ({ filename: taskFileName(rename.filenameId), declaredId: rename.declaredId })),
+      };
+    }
+  }
+
+  // A swap is fine: both targets are sources, and both move aside first.
+  const sources = new Set(plan.renames.map((rename) => rename.path));
+  for (const rename of plan.renames) {
+    if (existsSync(rename.target) && !sources.has(rename.target)) {
+      return {
+        kind: "target_exists",
+        entry: {
+          filename: taskFileName(rename.filenameId),
+          declaredId: rename.declaredId,
+          existing: taskFileName(rename.declaredId),
+        },
+      };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Apply the repair under the board lock: re-plan, then both rename passes, then
+ * the counter. It takes no plan argument, so a printed plan is never applied
+ * blind (design §5.1, §5.5). A refusal or an empty plan writes nothing.
+ */
+export async function repairIds(
+  location: BoardLocation,
+  agent: string,
+): Promise<{ plan: RepairPlan; applied: boolean }> {
+  assertHandle(agent);
+  return withBoardLock(join(location.dir, FILES.lock), () => {
+    const plan = planRepairIds(location);
+    if (repairRefusal(plan)) return { plan, applied: false };
+    if (plan.renames.length === 0 && !plan.counter) return { plan, applied: false };
+
+    // Two passes so a swap or a chain cannot collide. One token per run names
+    // every staged file, so an interrupted run is recognisable and skipped.
+    const token = randomBytes(6).toString("hex");
+    const staged = plan.renames.map((rename) => ({
+      rename,
+      temp: join(location.tasksDir, `.repair.${token}.${rename.filenameId}.md`),
+    }));
+    for (const { rename, temp } of staged) renameSync(rename.path, temp);
+    for (const { rename, temp } of staged) renameSync(temp, rename.target);
+
+    // Never lowered: a counter above the highest id is not rewritten at all.
+    if (plan.counter) {
+      atomicWrite(join(location.dir, FILES.counter), `${JSON.stringify({ next: plan.counter.to }, null, 2)}\n`);
+    }
+    return { plan, applied: true };
+  });
 }
 
 /** Task summaries for tools and the `/kanban` view. */

@@ -2,7 +2,7 @@
 
 A task has at most one assignee. Assigning an already-assigned task fails unless the caller passes `force`, and a forced assignment is recorded in the task's history as a steal. The assignee is an opaque handle; the extension does not verify that it names an agent, because it cannot.
 
-This decision covers explicit assignment. How a claim is created and ended by a status transition is recorded in [ADR 0008](0008-claims-are-part-of-the-state-machine.md).
+This decision covers explicit assignment. How a claim is created and ended by a status transition is recorded in [ADR 0008](0008-claims-are-part-of-the-state-machine.md), and why assigning a task to a handle other than your own also needs `force` is recorded in [ADR 0009](0009-third-party-assignment-is-forced.md).
 
 Two agents editing the same task in parallel is the failure this board exists to prevent, so a second assignment must be a deliberate act rather than a last-write-wins overwrite. There are no leases or heartbeats: a crashed agent leaves its task assigned, and releasing it is an explicit act by a human or another agent. Expiry would silently unassign work that is still in progress, which is a worse failure than a stale claim.
 

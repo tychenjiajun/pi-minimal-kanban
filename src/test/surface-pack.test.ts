@@ -9,7 +9,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import kanbanExtension from "../index.ts";
-import { handleKanbanCommand } from "../command.ts";
+import { USAGE, handleKanbanCommand } from "../command.ts";
 import { assignTask, createTask, moveTask, readBoard, validateBoard } from "../store.ts";
 import { renderTaskRows } from "../render.ts";
 import { ListParams } from "../schemas.ts";
@@ -29,6 +29,7 @@ function loadTools(): Map<string, RegisteredTool> {
   const pi = {
     registerTool: (tool: { name: string } & RegisteredTool) => tools.set(tool.name, tool),
     registerCommand: () => undefined,
+    on: () => () => undefined,
     events: { emit: () => undefined, on: () => () => undefined },
   } as unknown as ExtensionAPI;
   kanbanExtension(pi);
@@ -371,5 +372,44 @@ describe("the briefing cap counts the statuses it hides", () => {
     expect(line).toContain("(+10 more)");
     expect(line).toContain("◆ backlog-refinement");
     expect(line).not.toContain("◆ design-review");
+  });
+});
+
+// ─── T-0015: the 14-line help card ───────────────────────────────────────────
+
+describe("/kanban help is the finished 14-line card", () => {
+  it("is exactly 14 lines, and every line is at most 76 characters", () => {
+    const lines = USAGE.split("\n");
+    expect(lines).toHaveLength(14);
+    for (const line of lines) expect([...line].length).toBeLessThanOrEqual(76);
+  });
+
+  it("states each of the six rules as one literal line", () => {
+    // One substring per rule, from design v0.3 §4's table. A later edit that
+    // silently drops a rule fails here rather than in a snapshot.
+    expect(USAGE).toContain("active (◆) status claims it for your handle");
+    expect(USAGE).toContain("terminal status releases the claim");
+    expect(USAGE).toContain("self-asserted");
+    expect(USAGE).toContain("Assigning a task to another handle needs force: true");
+    expect(USAGE).toContain("Completions use this session's board");
+    expect(USAGE).toContain("subcommands");
+  });
+
+  it("keeps the kanban_list pointer", () => {
+    expect(USAGE).toContain("Start with kanban_list");
+  });
+
+  it("names repair-ids only in its usage line, not as a second paragraph", () => {
+    const lines = USAGE.split("\n").filter((line) => line.includes("repair-ids"));
+    expect(lines).toEqual(["       /kanban repair-ids [--dry-run | --yes] [--as <handle>]"]);
+  });
+
+  it("prints the block unchanged for `help` and `--help`", async () => {
+    const board = makeBoard();
+    for (const args of ["help", "--help"]) {
+      const { ctx, messages } = ctxFor(board.root);
+      await handleKanbanCommand(args, ctx);
+      expect(messages).toEqual([USAGE]);
+    }
   });
 });

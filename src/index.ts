@@ -144,6 +144,9 @@ function taskLine(task: ReturnType<typeof detail>): string {
 }
 
 export default function kanbanExtension(pi: ExtensionAPI) {
+  /** The board completions use; `getArgumentCompletions` receives no `cwd`. */
+  let cachedBoard: BoardLocation | undefined;
+
   const notifyChange = (location: BoardLocation, taskId: string, action: string): void => {
     pi.events.emit("kanban:task_changed", {
       project: location.root,
@@ -202,6 +205,7 @@ export default function kanbanExtension(pi: ExtensionAPI) {
       promptGuidelines: [
         "Call kanban_list first to see the task's current status and the statuses its workflow allows.",
         "Only the claiming agent may move a task that is already in an active status; `force` takes over deliberately.",
+        "Pass `reason` with `force` so the takeover is auditable; it prints under the history entry.",
         "Pass `expectedRev` from the last kanban_list read when another agent may have written since; a stale rev fails the call instead of overwriting.",
       ],
       parameters: MoveParams,
@@ -217,6 +221,7 @@ export default function kanbanExtension(pi: ExtensionAPI) {
             to: params.to,
             agent: params.agent,
             force: params.force,
+            reason: params.reason,
             expectedRev: params.expectedRev,
           });
           notifyChange(location, task.id, "move");
@@ -242,10 +247,12 @@ export default function kanbanExtension(pi: ExtensionAPI) {
       name: "kanban_assign",
       label: "Kanban Assign",
       description:
-        "Set or clear the single assignee of a task. Another handle's claim can only be taken or released with `force`.",
+        "Set or clear the single assignee of a task. Another handle's claim can only be taken or released with `force`, and assigning the task to any handle but your own needs it too.",
       promptSnippet: "Assign or release a kanban task's single owner",
       promptGuidelines: [
         "A task has at most one assignee; assigning an owned task fails unless you pass `force`.",
+        "Assigning a task to any handle but your own needs `force: true`; history then records a forced assignment.",
+        "Pass `reason` with `force` so the takeover is auditable; it prints under the history entry.",
         "Prefer moving the task into an active status, which claims it for you, over assigning and then moving.",
         "Pass `expectedRev` when you are releasing or taking over a task another handle may have changed since your last read.",
       ],
@@ -262,6 +269,7 @@ export default function kanbanExtension(pi: ExtensionAPI) {
             assignee: params.assignee,
             agent: params.agent,
             force: params.force,
+            reason: params.reason,
             expectedRev: params.expectedRev,
           });
           notifyChange(location, task.id, params.assignee === null ? "unassign" : "assign");
@@ -482,14 +490,37 @@ export default function kanbanExtension(pi: ExtensionAPI) {
   pi.registerCommand("kanban", {
     description: "View the project kanban board",
     getArgumentCompletions: (prefix) =>
-      completeKanbanCommand(prefix).map((item) => ({
+      completeKanbanCommand(prefix, cachedBoard).map((item) => ({
         value: item.label,
         label: item.label,
         description: item.description,
       })),
-    handler: handleKanbanCommand,
+    // Refresh first: `ctx.cwd` cannot change without a new session, so this is
+    // what makes a stale cached location impossible inside one.
+    handler: async (args, ctx) => {
+      cachedBoard = resolveCachedBoard(ctx.cwd);
+      return handleKanbanCommand(args, ctx);
+    },
   });
 
-  // The board is files, so nothing needs restoring on session start. Rendering
-  // happens on demand, which keeps `/reload` and `/resume` free of side effects.
+  // Completions get only the prefix, never a `cwd` (design v0.3 §3.1), so the
+  // location is cached here and refreshed on the events that can move it.
+  pi.on("session_start", (_event, ctx) => {
+    cachedBoard = resolveCachedBoard(ctx.cwd);
+  });
+  pi.on("session_before_switch", () => {
+    cachedBoard = undefined;
+  });
+  pi.on("session_shutdown", () => {
+    cachedBoard = undefined;
+  });
+}
+
+/** The board for this session's `cwd`, or undefined when there is none. */
+function resolveCachedBoard(cwd: string): BoardLocation | undefined {
+  try {
+    return resolveBoard({ cwd });
+  } catch {
+    return undefined;
+  }
 }

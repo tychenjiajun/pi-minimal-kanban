@@ -24,6 +24,7 @@ function loadExtension() {
   const pi = {
     registerTool: (tool: RegisteredTool) => tools.set(tool.name, tool),
     registerCommand: () => undefined,
+    on: () => () => undefined,
     events: { emit: () => undefined, on: () => () => undefined },
   } as unknown as ExtensionAPI;
   kanbanExtension(pi);

@@ -101,7 +101,7 @@ describe("renderTaskLine", () => {
   it("is a single line with status, title, and owner", async () => {
     const board = makeBoard();
     const task = await createTask(board, { title: "A long enough title to be truncated eventually", agent: "a" });
-    await assignTask(board, { task: task.id, assignee: "coder-1", agent: "a" });
+    await assignTask(board, { task: task.id, assignee: "coder-1", agent: "coder-1" });
     const line = renderTaskLine(readTask(board, task.id));
     expect(line.split("\n")).toHaveLength(1);
     expect(line).toContain("T-0001");

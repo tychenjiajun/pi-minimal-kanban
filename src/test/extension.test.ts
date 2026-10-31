@@ -25,6 +25,7 @@ function loadExtension() {
       emit: (channel: string, data: unknown) => events.push({ channel, data }),
       on: () => () => undefined,
     },
+    on: () => () => undefined,
   } as unknown as ExtensionAPI;
 
   kanbanExtension(pi);

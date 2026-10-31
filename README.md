@@ -64,9 +64,9 @@ The agent calls `kanban_create` and `kanban_move`, and the board looks like:
 | Tool | Purpose |
 |---|---|
 | `kanban_create` | Create a task in the workflow's initial status. |
-| `kanban_move` | Move along a declared transition; entering an active status claims it. |
+| `kanban_move` | Move along a declared transition; entering an active status claims it. `reason` annotates a forced takeover. |
 | `kanban_comment` | Append a Markdown comment. |
-| `kanban_assign` | Set or clear the single assignee (force to take another's claim). |
+| `kanban_assign` | Set or clear the single assignee; assigning to any handle but your own needs `force`, and `reason` annotates a forced write. |
 | `kanban_list` | List tasks (paged), read one task in full, print counts, or print the board briefing. |
 
 Every tool takes an `agent` handle (except `kanban_list`) and returns
@@ -115,22 +115,44 @@ the file it could not read.
 /kanban status <id>         only tasks in one status
 /kanban mine <handle>       only tasks assigned to a handle
 /kanban release <id>        release a claim (the one subcommand that writes)
+/kanban repair-ids          rename task files to the ids they declare (writes)
 ```
 
 Rendering is plain text in the transcript — scrollable and copyable, and it works
-in headless and RPC modes. Everything renders read-only except `release`:
+in headless and RPC modes. Everything renders read-only except `release` and
+`repair-ids`:
 `/kanban release <id>` clears a claim and records a forced unassignment in the
 task's history. It asks for `--yes` before writing; `--as <handle>` names the
 operator recorded as `by` (default `PI_KANBAN_HANDLE`, else `human`).
 
+`/kanban help` (or `/kanban --help`) prints a 14-line card, not a manual: the
+claim rule (moving into an active `◆` status claims the task for your handle),
+that a terminal status releases the claim and a claim never expires on its own,
+that handles are self-asserted names the board does not verify, that assigning a
+task to another handle needs `force: true`, and where completions look.
+
+Tab completion lists the subcommands, the task ids on this session's board (with
+status and title), and every handle the board has seen; with no board it
+completes only the subcommands.
+
 `/kanban validate` also reports a task whose frontmatter `id` disagrees with its
 filename, an unreadable task file (`unreadable_task`), and a `counter.json` value
-that would reissue an existing task id. A claim older than the threshold (24 h by
+that would reissue an existing task id. `/kanban repair-ids` fixes exactly the
+first and last of those: it renames a file to the id its frontmatter declares
+(never the reverse — an issued id is never discarded) and raises a low counter,
+never lowers one. A `T-0007` mentioned in a description or a comment stays as
+written: prose is not rewritten. `--dry-run` prints the plan and writes nothing;
+`--yes` takes the board lock, re-plans under it, and applies.
+
+A claim older than the threshold (24 h by
 default, overridable with `--stale` or `PI_KANBAN_STALE_MS`, alias
 `PI_KANBAN_STALE_CLAIM_MS`) is a
 `stale_claim` **warning**: it is reported but keeps the board valid. An
 assignment older than the threshold in a non-active status is the same warning,
 worded as an assignment — it is what blocks the move that would create a claim.
+A forced takeover that carries no `reason` is a `unannotated_forced`
+**warning**: `kanban_assign` and `kanban_move` accept `reason` with `force`, and
+a takeover recorded before 0.3.0 stays valid — it just becomes visible.
 
 ## Claim age and releasing a claim
 
@@ -145,6 +167,17 @@ A claim never expires on its own. When its owner has gone quiet:
 - `/kanban release T-0003` prints a confirmation and writes nothing;
   `/kanban release T-0003 --yes` clears the claim and bumps `rev`.
 - From an agent: `kanban_assign {task: "T-0003", assignee: null, force: true}`.
+
+## Assignment is exclusive, and third-party assignment is forced
+
+A task has at most one assignee, and **any write to an assignee that is not your
+own handle needs `force: true`** — taking another handle's task, assigning a
+task nobody holds to a third handle, or handing your own task to somebody else.
+A forced write is recorded as `force-assign` + `forced: true` (plus an optional
+`reason`), so history tells a takeover from a self-claim; assigning a task to
+yourself on an unassigned task needs no `force` and records a plain `assign`.
+The rule is ADR [0009](docs/adr/0009-third-party-assignment-is-forced.md), and
+the refusal reuses the `wrong_owner` code.
 
 ## Where the board lives
 
