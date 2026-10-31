@@ -1,30 +1,50 @@
 # pi-minimal-kanban
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/tychenjiajun/pi-minimal-kanban/main/assets/preview.png" alt="pi-minimal-kanban: a file-backed Kanban board for Pi agents — exclusive claims, declared workflows, tasks as Markdown" width="880">
+</p>
+
+**Pi extension that gives a whole team of agents one shared, file-backed Kanban board**: project-declared
+workflows, exclusive task claims, and Markdown tasks you can diff and commit. No database, no server,
+no daemon.
+
 [![CI](https://github.com/tychenjiajun/pi-minimal-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/tychenjiajun/pi-minimal-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![pi-package](https://img.shields.io/badge/pi-package-7c3aed.svg)](https://pi.dev/packages/pi-minimal-kanban)
 [![pi extension](https://img.shields.io/badge/pi-extension-7c3aed.svg)](https://pi.dev/docs/latest/extensions)
 
-A small, file-backed Kanban board for [Pi](https://pi.dev) agents. It lets
-several agents (and the humans driving them) share one project's work without
-stepping on each other.
+```bash
+# works today, straight from the repository
+pi install git:github.com/tychenjiajun/pi-minimal-kanban
+# once it is published to npm
+pi install npm:pi-minimal-kanban
+```
+
+Several agents share one project's work without stepping on each other:
 
 - **Project-specific workflows.** Each project declares its own statuses and
   transitions in `.pi/kanban/workflow.yaml` — from `new → done` to a seven-stage
   pipeline.
 - **Exclusive claims.** A task has at most one assignee. Moving a task into an
   `active` status claims it; another agent cannot move or release it without
-  `force`.
+  `force`, and a forced takeover can carry the `reason` that makes it auditable.
 - **Files only.** No database, no server, no daemon. Tasks are Markdown files
   you can read, diff, and commit.
-- **Minimal UI.** Five tools and one `/kanban` command that only renders.
+- **Minimal UI.** Five tools and one `/kanban` command that renders plain text.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/tychenjiajun/pi-minimal-kanban/main/assets/demo.gif" alt="Two agents duplicate work; with the board, one claims the task, the other gets wrong_owner, and a forced takeover records why" width="760">
+</p>
 
 ## Install
 
 ```bash
+pi install git:github.com/tychenjiajun/pi-minimal-kanban
+# or from the npm registry, once published:
 pi install npm:pi-minimal-kanban
 ```
 
-Or load it from a checkout while developing:
+While developing, load it from a checkout:
 
 ```bash
 pi --extension ./src/index.ts
@@ -256,6 +276,46 @@ Task files are documented in [docs/task-file.md](docs/task-file.md).
   0.3.0, the design spec for the tool surface, and the scope decisions,
   including what was deliberately deferred.
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each release.
+- [pi.dev/packages/pi-minimal-kanban](https://pi.dev/packages/pi-minimal-kanban) — the gallery page.
+- [pi packages documentation](https://pi.dev/docs/latest/packages) — how Pi extensions are packaged.
+
+## FAQ
+
+### What does pi-minimal-kanban do?
+It gives Pi agents a shared Kanban board stored as files in your repository: agents create tasks, claim
+them by moving them into an active status, and see who owns what before starting. It is a coordination
+primitive, not a project tracker with a UI.
+
+### How is this different from a todo list in the prompt?
+A todo list lives in one agent's context and dies with the session. The board lives in the repository:
+it survives sessions, is shared by every agent on the project, and enforces that only one agent holds a
+task at a time.
+
+### Do I need multiple agents to use it?
+No. One agent plus a human reading `/kanban` is a useful setup. The board earns its keep the moment two
+sessions — or two machines — touch the same project.
+
+### What happens when an agent dies holding a task?
+Nothing expires on its own, by design: a claim is never released behind its owner's back. `/kanban`
+shows the claim's age and `/kanban validate` warns past a threshold (24 h by default); a human runs
+`/kanban release T-0003 --yes`, or another agent takes over with `force: true` and a `reason`.
+
+### Why require `force` to assign a task to someone else?
+Because writing another handle's name is a coordination act the owner never consented to. Self-claims
+need no flag; every other assignee write is explicit and lands in history as `force-assign`.
+
+### Can two agents really not corrupt the board?
+Every mutation re-reads and rewrites under a short-lived file lock, so two agents racing for a task end
+with one winner and one `wrong_owner`. Tasks carry a `rev`; pass `expectedRev` to fail instead of
+overwriting a write you did not see.
+
+### How many tasks can it hold?
+A 120-task board renders fine; `kanban_list` pages (50 rows by default, 500 max) so a large board never
+costs a large context window. A board is a directory of small files, so anything git can handle works.
+
+### Does it work in headless / RPC mode?
+Yes. Rendering is plain text in the transcript, and every tool returns `structuredContent` for codemode
+scripts and other extensions.
 
 ## License
 

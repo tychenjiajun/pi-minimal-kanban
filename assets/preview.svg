@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-label="pi-minimal-kanban promo card">
+  <!-- Gallery card (16:10). Read at ~168 px wide in a center crop, so the name
+       is the dominant element and everything secondary is >= 28 px at 1600 px. -->
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="1" r="0.9">
+      <stop offset="0" stop-color="#7c3aed" stop-opacity="0.30"/>
+      <stop offset="0.6" stop-color="#7c3aed" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+      <path d="M50 0H0v50" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#0d0d12"/>
+  <rect width="1600" height="1000" fill="url(#grid)"/>
+  <rect width="1600" height="1000" fill="url(#glow)"/>
+
+  <!-- corner labels -->
+  <rect x="140" y="104" rx="8" width="286" height="56" fill="#7c3aed" fill-opacity="0.18" stroke="#7c3aed"/>
+  <text x="283" y="142" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="30" fill="#c4b5fd">pi-extension</text>
+  <text x="1460" y="142" text-anchor="end" font-family="ui-monospace, Menlo, monospace" font-size="30" fill="#8b8b9e">pi.dev/packages</text>
+
+  <!-- name: 3 columns x 3 rows, the whole board -->
+  <text x="800" y="404" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="132" font-weight="700" fill="#ffffff">pi-minimal-kanban</text>
+
+  <!-- tagline -->
+  <text x="800" y="480" text-anchor="middle" font-family="system-ui, sans-serif" font-size="46" fill="#c9c9d4">A file-backed Kanban board for agents</text>
+
+  <!-- the board itself: New / Building / Reviewing, one task moving -->
+  <g font-family="ui-monospace, Menlo, monospace" font-size="34">
+    <!-- New -->
+    <rect x="300" y="560" rx="14" width="300" height="196" fill="#16161d" stroke="#2c2c38" stroke-width="2"/>
+    <text x="330" y="608" fill="#8b8b9e" font-size="30">◇ New</text>
+    <rect x="330" y="632" rx="8" width="240" height="46" fill="#22222c"/>
+    <text x="350" y="664" fill="#8b8b9e" font-size="26">T-0042</text>
+    <rect x="330" y="690" rx="8" width="240" height="46" fill="#22222c"/>
+    <text x="350" y="722" fill="#8b8b9e" font-size="26">T-0043</text>
+
+    <!-- Building: the claimed task -->
+    <rect x="650" y="560" rx="14" width="300" height="196" fill="#16161d" stroke="#7c3aed" stroke-width="3"/>
+    <text x="680" y="608" fill="#c4b5fd" font-size="30">◆ Building</text>
+    <rect x="680" y="632" rx="8" width="246" height="46" fill="#2a1f45" stroke="#7c3aed" stroke-width="2"/>
+    <text x="700" y="664" fill="#ffffff" font-size="24">T-0041 @coder-1</text>
+    <text x="700" y="706" fill="#a78bfa" font-size="24">why  owner idle 2d</text>
+
+    <!-- Reviewing -->
+    <rect x="1000" y="560" rx="14" width="300" height="196" fill="#16161d" stroke="#2c2c38" stroke-width="2"/>
+    <text x="1030" y="608" fill="#8b8b9e" font-size="30">◆ Reviewing</text>
+    <rect x="1030" y="632" rx="8" width="240" height="46" fill="#22222c"/>
+    <text x="1050" y="664" fill="#8b8b9e" font-size="26">T-0044</text>
+  </g>
+
+  <!-- what makes it different -->
+  <g font-family="ui-monospace, Menlo, monospace" font-size="32" fill="#8b8b9e">
+    <text x="800" y="812" text-anchor="middle">exclusive claims  ·  declared workflows  ·  plain Markdown</text>
+  </g>
+
+  <!-- install pill -->
+  <rect x="400" y="850" rx="14" width="800" height="90" fill="#16161d" stroke="url(#accent)" stroke-width="3"/>
+  <text x="800" y="909" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="38" fill="#a78bfa">$ pi install npm:pi-minimal-kanban</text>
+</svg>
