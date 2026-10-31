@@ -86,6 +86,15 @@ A forced `unassign` entry is only written by `/kanban release`, which cannot
 carry a reason. `unannotated_forced` therefore inspects `force-assign` entries
 only (#1.6), and a released claim is never flagged.
 
+**Ruling (review, D1): a self-release drops the reason.** The literal rule above
+would put a reason on the `unassign` entry when you release a task you hold.
+That entry is then a takeover record with no takeover, and `/kanban validate`
+cannot verify it because it only reads `force-assign`. The rule is therefore:
+`reason` is written only on a `force-assign` entry, and on the first appended
+entry for a `move`; a call that appends an `unassign` writes no reason. That is
+the shipped behaviour (`store.ts`, `annotated`), and it keeps "a reason implies
+a forced assignment" true for every reader.
+
 ### 1.3 Validation, and the error without `force`
 
 `reason` **requires** `force: true`. Without it the call fails before the
@@ -161,6 +170,14 @@ Message, singular:
 
 Message, plural (`<n>` entries):
 `<n> forced assignments have no reason; the first is by "coder-1" on 2026-10-30. Add one next time with kanban_assign {force: true, reason: "..."}.`
+
+**Ruling (review, R1): the block below is the message, not the line breaks.**
+`/kanban validate` keeps the v0.2 greedy wrap at 76 columns (§6 forbids
+changing `wrapValidate`), so the rendered break points differ from the
+illustration: the first line ends after the date, and the second breaks inside
+`kanban_assign`. The illustration is drawn ~65 columns wide on purpose, so read
+it as one paragraph; §7 T-0012 check 8 asserts the shipped break points and
+that every line is <= 76 columns.
 
 ```
 Board is valid (1 warning).

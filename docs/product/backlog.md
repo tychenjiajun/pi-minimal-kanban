@@ -198,3 +198,43 @@ that is referenced in conversation but no longer matches, and nothing detects it
 - [x] `/kanban validate` reports a Task whose `id` frontmatter does not match its filename.
 - [x] `validate` reports a `counter.json` value that is not greater than the highest existing Task ID.
 - [x] `/kanban repair-ids --dry-run` lists the renumbering it would perform.
+
+---
+
+## Post-0.3.0, from the v0.3.0 review
+
+Found by `reviewer-v03` while reviewing v0.3.0. None of these block the release;
+they are recorded so the findings do not live only in a task comment.
+
+### 14. A shared `fakePi()` for the test harnesses
+
+Eight test files build their own `ExtensionAPI` stub. Adding any member to
+`pi.*` (v0.3.0 added `pi.on`) breaks all of them at once with
+`pi.on is not a function`, which reads as 47 unrelated failures.
+
+- [ ] `src/test/helpers.ts` exports one `fakePi()` stub every test file uses.
+- [ ] Adding a hook to the extension touches no test file.
+
+### 15. `parseArgs` accepts a valued flag with no value
+
+`/kanban repair-ids --as` sets `as` to `""` and reaches `resolveOperator("")`,
+which refuses with an `invalid_handle` message quoting an empty string.
+
+- [ ] A valued flag with no value is an `invalid_argument` naming the flag.
+- [ ] `/kanban release T-0001 --as` and `--stale` behave the same way.
+
+### 16. `validate` counts the highest id from readable tasks only
+
+`validateBoard` computes `highest` from readable Tasks, so a board whose
+highest-id file is corrupted can report `counter_low` spuriously.
+`planRepairIds` uses filenames instead, so the two can disagree.
+
+- [ ] `validate` derives the highest id the same way `repair-ids` does.
+- [ ] A corrupted highest-id file does not produce `counter_low`.
+
+### 17. Completions read every task file
+
+`completeKanbanCommand` reads all Task files and then caps at 500. Correct, but
+O(tasks) on every keystroke of a completion prefix.
+
+- [ ] A board with 2000 tasks completes a prefix in under 50 ms.
