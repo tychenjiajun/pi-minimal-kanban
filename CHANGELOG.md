@@ -1,5 +1,80 @@
 # Changelog
 
+## 0.3.0 — legible takeovers
+
+2026-11-01. A takeover now leaves a readable trace, assigning a task to a handle
+that is not yours is a deliberate act, and the `/kanban` surface finishes what
+0.2.0 promised. No new runtime dependency: the release adds to the one `yaml`
+dependency the package already had.
+
+### Added
+
+- **`reason` on a forced assignment.** `kanban_assign` and `kanban_move` accept an
+  optional `reason` (one line, 1-200 characters) whenever `force: true` is set.
+  It is written on the single `force-assign` entry the call appends and printed
+  as a `why` line beneath it in `/kanban <task-id>`, so a reader can tell "the
+  owner crashed" from "the owner was preempted". `/kanban validate` reports a
+  takeover without one as an `unannotated_forced` **warning**: the board stays
+  valid, the entry is still readable, and nothing is rewritten. A `reason`
+  without `force` is an `invalid_argument` error, so an annotation can never
+  record a write that took nothing over.
+- **Tab completion.** `/kanban` completes the subcommands, the task ids on this
+  session's board (with status and title), and the handles the board has seen.
+  The caps are stated rather than silent: at most 20 task ids and 10 handles,
+  scanned from the first 500 task files. With no board it completes only the
+  subcommands.
+- **`/kanban help`.** A 14-line card instead of a manual: moving into an active
+  `◆` status claims the task for your handle, a terminal status releases the
+  claim and no claim ever expires on its own, handles are self-asserted names
+  the board does not verify, assigning a task to another handle needs
+  `force: true`, completions look in this session's board, and the pointer to
+  `kanban_list`.
+- **`/kanban repair-ids [--dry-run | --yes]`.** Renames a task file to the id its
+  frontmatter declares and raises a low `counter.json`; it never rewrites the
+  reverse, and a `T-0007` mentioned inside a description or a comment stays as
+  written. It is a mutating subcommand, and it writes nothing unless you ask:
+  `--dry-run` prints the plan, `--yes` re-plans under the board lock and applies
+  it, and both flags together are refused.
+
+### Changed
+
+- **Assigning a task to another handle now requires `force: true`** (ADR 0009).
+  This is a behaviour change for agents that assign on someone else's behalf:
+  they now pass `force: true` (and may add a `reason`). Assigning to yourself,
+  releasing your own claim, and taking over with an explicit `force` behave as
+  before. The rule is stated in the tool description, the prompt guidelines, the
+  help card, `README.md`, and `docs/workflow.md`.
+- **A takeover into a terminal status records it.** `moveTask` writes
+  `force-assign`, then `move`, then `unassign` when the target status is terminal
+  and the claim is released.
+
+### Compatibility
+
+- **Third-party assignment requires `force: true`** — a breaking change for agents
+  that assigned on someone else's behalf. One-line migration: add
+  `force: true` (with a `reason` if the takeover deserves one) to those calls;
+  everything else keeps working unchanged.
+- **Boards written before 0.3.0 are still valid.** Their `force-assign` entries
+  have no `reason`, so `/kanban validate` reports them once per task as
+  `unannotated_forced` warnings: visible, not fatal, and no history is rewritten
+  and no `rev` is bumped. New takeovers can carry a reason from now on.
+- **`repair-ids` is a new mutating subcommand.** It is the second of the two
+  writing `/kanban` subcommands, and it refuses to write unless you pass
+  `--dry-run` (plan only) or `--yes` (apply under the board lock). A missing
+  flag prints the plan and writes nothing, like `/kanban release` without
+  `--yes`.
+
+### Design notes
+
+- `docs/adr/0009-third-party-assignment-is-forced.md` records the forced-
+  assignment decision; `docs/product/design-v0.3.md` is the spec for the release
+  and `docs/product/v0.3-scope.md` the scope, including what was deliberately
+  deferred: enforcing the claim in non-active statuses (#2), the `/kanban` scale
+  story (#6), and the unused `KanbanError.toJSON()` (#8).
+- `docs/product/backlog.md` checkboxes now match the shipped tree: `[x]` means
+  shipped, and the deferred sub-bullets (#2, #4's workflow-only print, #6, #8's
+  `toJSON()`) are still open.
+
 ## 0.2.0 — trustworthy coordination
 
 The board was already file-backed with declared workflows and exclusive claims.

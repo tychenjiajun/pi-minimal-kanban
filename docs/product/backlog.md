@@ -26,11 +26,11 @@ Claim age where the Claim is read, report long-idle Claims as a distinct
 diagnostic (not as a failure), and give a person a documented way to release a
 Claim without an Agent.
 
-- [ ] `kanban_list` and `/kanban` show the Claim age (for example `@coder-1 3d`) wherever an Assignee is shown.
-- [ ] `/kanban validate` reports a separate `stale_claim` problem when a Claim is older than a configurable threshold, and no longer reports a Claim-free Active status as a problem.
-- [ ] The `wrong_owner` error states the Claim age and names the exact call that releases it.
-- [ ] `/kanban release <task-id>` releases a Claim (recording a Forced assignment in History) with an explicit confirmation step.
-- [ ] Documentation in `README.md` and `docs/adr/0004` describes the release path.
+- [x] `kanban_list` and `/kanban` show the Claim age (for example `@coder-1 3d`) wherever an Assignee is shown.
+- [x] `/kanban validate` reports a separate `stale_claim` problem when a Claim is older than a configurable threshold, and no longer reports a Claim-free Active status as a problem.
+- [x] The `wrong_owner` error states the Claim age and names the exact call that releases it.
+- [x] `/kanban release <task-id>` releases a Claim (recording a Forced assignment in History) with an explicit confirmation step.
+- [x] Documentation in `README.md` and `docs/adr/0004` describes the release path.
 
 ### 2. Enforce the Claim in every non-Terminal Status, not only Active ones
 
@@ -57,10 +57,10 @@ self-asserted — live in `GLOSSARY.md` and `docs/adr/`, which an Agent working 
 Pi is not given. Nothing tells a new Agent what to call first, so the first real
 interaction is often a rejected `kanban_move`.
 
-- [ ] A board briefing is available on demand (for example `kanban_list` with `briefing: true`, or a `kanban_guide` tool) returning the Workflow, the claim rules, the Handle convention, and the recommended first calls.
-- [ ] `kanban_list` on an otherwise empty Board returns the briefing instead of "No matching tasks."
-- [ ] Each tool's `promptGuidelines` states the one rule most likely to be violated for that tool, in one sentence.
-- [ ] A test asserts the briefing names the Initial status, every Active status, and the `force` rule.
+- [x] A board briefing is available on demand (for example `kanban_list` with `briefing: true`, or a `kanban_guide` tool) returning the Workflow, the claim rules, the Handle convention, and the recommended first calls.
+- [x] `kanban_list` on an otherwise empty Board returns the briefing instead of "No matching tasks."
+- [x] Each tool's `promptGuidelines` states the one rule most likely to be violated for that tool, in one sentence.
+- [x] A test asserts the briefing names the Initial status, every Active status, and the `force` rule.
 
 ---
 
@@ -75,10 +75,10 @@ per call with no `limit`, `offset`, or summary mode, so an Agent that polls the
 Board pays a linear, unbounded context tax. The Workflow does not change between
 calls in the same session and does not need to be re-sent to be useful.
 
-- [ ] `kanban_list` accepts `limit` and `offset`, returns at most the requested number of rows, and states how many rows were omitted.
-- [ ] A `summary: true` mode returns per-Status counts and Claimed counts without listing Tasks.
+- [x] `kanban_list` accepts `limit` and `offset`, returns at most the requested number of rows, and states how many rows were omitted.
+- [x] A `summary: true` mode returns per-Status counts and Claimed counts without listing Tasks.
 - [ ] The Workflow block is printed only when the Workflow changed since the previous call in the same session, or when explicitly requested.
-- [ ] Default output for a Board with more than 50 matching Tasks truncates with a pointer to the filters.
+- [x] Default output for a Board with more than 50 matching Tasks truncates with a pointer to the filters.
 
 ### 5. Keep the Board readable when one Task file is broken
 
@@ -88,11 +88,11 @@ blanks `kanban_list`, `/kanban`, `/kanban --json`, and `validate` for the whole
 Board, which is the outcome `docs/adr/0007`:5 was written to prevent — that ADR
 covers Status drift only, not file-level damage.
 
-- [ ] A Task file that cannot be parsed is reported as a single problem row and excluded from the Board instead of aborting the read.
-- [ ] `/kanban` renders every readable Task and lists the unreadable files with their paths in the warning block.
-- [ ] `kanban_list` returns readable Tasks plus a per-file error list in `structuredContent`.
-- [ ] `/kanban validate` reports each unreadable file with its path and the parse error.
-- [ ] A test covers a Board with one valid and one malformed Task file.
+- [x] A Task file that cannot be parsed is reported as a single problem row and excluded from the Board instead of aborting the read.
+- [x] `/kanban` renders every readable Task and lists the unreadable files with their paths in the warning block.
+- [x] `kanban_list` returns readable Tasks plus a per-file error list in `structuredContent`.
+- [x] `/kanban validate` reports each unreadable file with its path and the parse error.
+- [x] A test covers a Board with one valid and one malformed Task file.
 
 ### 6. Give `/kanban` a scale story
 
@@ -119,10 +119,10 @@ runs. The guard exists but cannot be reached from the channel the instructions
 point at, and a Comment bumps `rev` (`src/store.ts:531-536`), turning unrelated
 comments into `stale` failures.
 
-- [ ] `kanban_list` text includes `rev` on every Task row.
-- [ ] `renderTask` and `/kanban <task-id>` show `rev` (the task view already shows it; the list does not).
-- [ ] Guidance in `kanban_move`, `kanban_assign`, and `kanban_comment` states when `expectedRev` should be passed, and the default is documented.
-- [ ] `stale` errors repeat the observed and expected rev and the current Status.
+- [x] `kanban_list` text includes `rev` on every Task row.
+- [x] `renderTask` and `/kanban <task-id>` show `rev` (the task view already shows it; the list does not).
+- [x] Guidance in `kanban_move`, `kanban_assign`, and `kanban_comment` states when `expectedRev` should be passed, and the default is documented.
+- [x] `stale` errors repeat the observed and expected rev and the current Status.
 
 ### 8. Make tool errors complete and trustworthy
 
@@ -134,10 +134,10 @@ Handle validation message contradicts its own regex (`src/store.ts:10` vs `:28`)
 `KanbanError.toJSON()` (`src/errors.ts:37-39`) is dead code beside a duplicate
 serialization in `fail()`.
 
-- [ ] Unknown exceptions map to a typed code (`io`, `parse`, `permission`) with a hint naming the file involved.
-- [ ] Every error payload includes the Board `dir` and `root`.
-- [ ] `already_in_status` reports the current Assignee and whether the caller already holds the Claim.
-- [ ] The `assertHandle` message matches its regex, including the first-character rule.
+- [x] Unknown exceptions map to a typed code (`io`, `parse`, `permission`) with a hint naming the file involved.
+- [x] Every error payload includes the Board `dir` and `root`.
+- [x] `already_in_status` reports the current Assignee and whether the caller already holds the Claim.
+- [x] The `assertHandle` message matches its regex, including the first-character rule.
 - [ ] `fail()` serializes via one shared function, and `toJSON()` is removed or used.
 
 ---
@@ -174,9 +174,9 @@ never consented to, and the Board cannot express the difference.
 (`src/index.ts:161-166`) can disagree with the Transition actually applied under
 the Board lock.
 
-- [ ] `moveTask` returns the observed `from` Status from inside the Board lock.
-- [ ] `index.ts` no longer reads the Task before the call.
-- [ ] A test with a concurrent move asserts the reported `from` matches the applied Transition.
+- [x] `moveTask` returns the observed `from` Status from inside the Board lock.
+- [x] `index.ts` no longer reads the Task before the call.
+- [x] A test with a concurrent move asserts the reported `from` matches the applied Transition.
 
 ### 12. Finish the `/kanban` command surface
 

@@ -114,7 +114,7 @@ the file it could not read.
 /kanban validate --stale 12h  warn about claims older than 12h
 /kanban status <id>         only tasks in one status
 /kanban mine <handle>       only tasks assigned to a handle
-/kanban release <id>        release a claim (the one subcommand that writes)
+/kanban release <id>        release a claim (asks for --yes; repair-ids writes too)
 /kanban repair-ids          rename task files to the ids they declare (writes)
 ```
 
@@ -132,8 +132,9 @@ that handles are self-asserted names the board does not verify, that assigning a
 task to another handle needs `force: true`, and where completions look.
 
 Tab completion lists the subcommands, the task ids on this session's board (with
-status and title), and every handle the board has seen; with no board it
-completes only the subcommands.
+status and title), and the handles the board has seen — up to 20 task ids and 10
+handles, scanned from the first 500 task files; with no board it completes only
+the subcommands.
 
 `/kanban validate` also reports a task whose frontmatter `id` disagrees with its
 filename, an unreadable task file (`unreadable_task`), and a `counter.json` value
@@ -243,9 +244,9 @@ Task files are documented in [docs/task-file.md](docs/task-file.md).
 - [GLOSSARY.md](GLOSSARY.md) — board, workflow, status, task, claim.
 - [docs/adr/](docs/adr/) — why the board lives in the repo, why workflows are
   declared, why tasks are Markdown, why claims are part of the state machine.
-- [docs/product/](docs/product/) — the product audit and backlog behind 0.2.0,
-  the design spec for the tool surface, and the scope decisions, including what
-  was deliberately deferred.
+- [docs/product/](docs/product/) — the product audit and backlog behind 0.2.0 and
+  0.3.0, the design spec for the tool surface, and the scope decisions,
+  including what was deliberately deferred.
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each release.
 
 ## License

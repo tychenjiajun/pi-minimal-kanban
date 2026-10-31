@@ -1,6 +1,6 @@
 {
   "name": "pi-minimal-kanban",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "Minimal file-backed Kanban for Pi agents: project-specific workflows, exclusive task claims, and a read-only /kanban view.",
   "main": "src/index.ts",

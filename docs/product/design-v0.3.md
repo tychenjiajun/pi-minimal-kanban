@@ -78,7 +78,7 @@ first entry it appends.
 | `kanban_assign {force:true}`, takes another handle's task | `force-assign` | `force-assign` |
 | `kanban_assign {force:true}`, task unassigned, `assignee` another handle | `force-assign` | `force-assign` |
 | `kanban_assign {force:true}`, `assignee` = caller | `assign` | `assign` |
-| `kanban_move {force:true}`, takes another handle's task | `force-assign`, `move`, `assign` | `force-assign` |
+| `kanban_move {force:true}`, takes another handle's task | `force-assign`, `move` (+ `unassign` when the target status is terminal) | `force-assign` |
 | `kanban_move {force:true}`, nothing to take over | `move`, `assign`/`unassign` | `move` |
 | `kanban_move {reason, no force}` | none | `invalid_argument` |
 

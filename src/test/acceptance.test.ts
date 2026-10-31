@@ -18,7 +18,7 @@ import kanbanExtension from "../index.ts";
 import { handleKanbanCommand } from "../command.ts";
 import { assignTask, createTask, moveTask, readTask, validateBoard } from "../store.ts";
 import { KanbanError } from "../errors.ts";
-import { LINEAR_WORKFLOW, makeBoard, taskFile } from "./helpers.ts";
+import { LINEAR_WORKFLOW, makeBoard, newestChangelogVersion, SEMVER, taskFile, versionsAgree } from "./helpers.ts";
 import type { BoardLocation } from "../paths.ts";
 
 // ─── Harness ────────────────────────────────────────────────────────────────
@@ -455,12 +455,25 @@ describe("T-0007: claim and rev correctness", () => {
 // ─── Release criteria: packaged version ──────────────────────────────────────
 
 describe("release criteria: packaged version", () => {
-  it("is bumped to 0.2.0 in package.json", () => {
-    // v0.2-scope.md: "Version bumped to 0.2.0 in package.json."
+  // Release rule: the packaged version tracks the newest CHANGELOG release and is
+  // well-formed semver (docs/product/v0.3-scope.md). Asserting that invariant,
+  // rather than one release's literal, keeps this green on every future bump.
+  it("matches the newest CHANGELOG release", () => {
     const packageJson = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as {
       version: string;
     };
-    expect(packageJson.version).toBe("0.2.0");
+    const changelog = readFileSync(new URL("../../CHANGELOG.md", import.meta.url), "utf8");
+    const newest = newestChangelogVersion(changelog);
+
+    expect(newest).toBeDefined();
+    expect(packageJson.version).toMatch(SEMVER);
+    expect(versionsAgree(packageJson.version, changelog)).toBe(true);
+  });
+
+  it("flags a packaged version that drifts from the newest CHANGELOG release", () => {
+    // The comparison is fed disagreeing fixtures; the real files are never touched.
+    expect(versionsAgree("1.0.0", "## 0.9.9")).toBe(false);
+    expect(versionsAgree("1.0.0", "## 1.0.0")).toBe(true);
   });
 });
 

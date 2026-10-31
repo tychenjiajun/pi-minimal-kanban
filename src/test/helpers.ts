@@ -74,3 +74,17 @@ export function taskFile(location: BoardLocation, id: string, content: string): 
   mkdirSync(dirname(join(location.tasksDir, `${id}.md`)), { recursive: true });
   writeFileSync(join(location.tasksDir, `${id}.md`), content, "utf8");
 }
+
+/** Release version shape: `MAJOR.MINOR.PATCH`, no pre-release or build suffix. */
+export const SEMVER = /^\d+\.\d+\.\d+$/;
+
+/** The newest release version: the semver on the first `## <semver>` heading. */
+export function newestChangelogVersion(changelog: string): string | undefined {
+  const heading = changelog.split("\n").find((line) => /^##\s/.test(line));
+  return heading?.match(/(\d+\.\d+\.\d+)/)?.[1];
+}
+
+/** Release criterion: the packaged version equals the newest CHANGELOG heading. */
+export function versionsAgree(packageVersion: string, changelog: string): boolean {
+  return newestChangelogVersion(changelog) === packageVersion;
+}
