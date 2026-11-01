@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.5.0 — set up, review, stand up
+
+2026-11-03. Two more atomic prompt templates ship beside the extension, so a
+project can be set up correctly and reviewed through the board, not just
+coordinated. No runtime change, no tool change, no on-disk format change.
+
+### Added
+
+- **`skills/kanban-setup/SKILL.md`** — the maintainer role, shipped as a skill
+  because it carries workflow-authoring context. It authors
+  `.pi/kanban/workflow.yaml` for the real project with ordinary file tools, walks
+  the loader's rules, checks its own file by calling `kanban_list`, and commits
+  `workflow.yaml`, `counter.json`, and `tasks/` as reviewed project state. It
+  loads when a project needs its first board, or when kanban calls fail because
+  the workflow is missing or invalid.
+- **`prompts/review.md` (`/review`)** — the reviewer role, shipped as a prompt
+  template. Finds the review-like statuses from the board briefing, reads each
+  owned task and its actual change, comments the verdict, and moves the task to
+  the terminal or back to working. It respects `wrong_owner` rather than forcing
+  another agent's claim to clear the list.
+
+### Changed
+
+- **Prompt bodies are written for the agent, not as human commands.** `/review`
+  and `/setup`-era text no longer tell the agent to "run `/kanban init`" or
+  "run `/kanban validate`": those are human UI commands an agent cannot invoke.
+  Board setup now writes the files with ordinary file tools and self-checks by
+  calling `kanban_list`; the pre-existing `/standup` and `skills/kanban` wording
+  that pointed at `/kanban validate` was corrected the same way.
+- **`README.md` documents two skills and two prompts as roles** — coordination,
+  setup, review, and standup — and separates model-loaded skills from
+  human-invoked prompt templates so the distinction is explicit.
+- **`src/test/resources.test.ts`** pins `kanban-setup` and `review` frontmatter,
+  the roles they run, the authoring reference they point at, and (as a guard)
+  that neither body instructs the agent to run `/kanban init` or
+  `/kanban validate`.
+
+### Compatibility
+
+- **Nothing to migrate.** `skills/**` and `prompts/**` were already declared in
+  `pi.skills`, `pi.prompts`, and `files`, so the new skill and prompt are
+  discovered and shipped with no `package.json` wiring beyond the version bump.
+
 ## 0.4.1 — 简体中文 README
 
 2026-11-01. A documentation release: the package gains a Simplified Chinese

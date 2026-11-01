@@ -85,6 +85,63 @@ describe("prompts/standup.md", () => {
   });
 });
 
+describe("skills/kanban-setup/SKILL.md", () => {
+  const SKILL = "skills/kanban-setup/SKILL.md";
+
+  it("has pi skill frontmatter with the name that matches its directory", () => {
+    nonEmptyFile(SKILL);
+    const { data } = frontmatter(SKILL);
+    expect(data.name).toBe("kanban-setup");
+    expect(typeof data.name).toBe("string");
+  });
+
+  it("describes both the job and when to load it, within the 1024 limit", () => {
+    const { data } = frontmatter(SKILL);
+    const text = data.description as string;
+    expect(typeof text).toBe("string");
+    expect(text.trim().length).toBeGreaterThan(0);
+    expect(text.length).toBeLessThanOrEqual(1024);
+    expect(text.toLowerCase()).toMatch(/workflow/);
+    expect(text.toLowerCase()).toMatch(/use when/);
+  });
+
+  it("sets a board up with file writes, not by running a slash command", () => {
+    const { body } = frontmatter(SKILL);
+    expect(body).toContain("\.pi/kanban/workflow.yaml");
+    expect(body).toContain("kanban_list");
+    // The skill must not tell the agent to invoke a human slash command.
+    expect(body).not.toMatch(/run\s+`?\/kanban/);
+    expect(body).not.toMatch(/\/kanban init/);
+    expect(body).not.toMatch(/\/kanban validate/);
+  });
+
+  it("points at the authoring rules it depends on", () => {
+    const { body } = frontmatter(SKILL);
+    expect(body).toContain("../kanban/references/workflow-authoring.md");
+  });
+});
+
+describe("prompts/review.md", () => {
+  const PROMPT = "prompts/review.md";
+
+  it("declares a description and takes no arguments", () => {
+    nonEmptyFile(PROMPT);
+    const { data } = frontmatter(PROMPT);
+    expect(typeof data.description).toBe("string");
+    expect((data.description as string).trim().length).toBeGreaterThan(0);
+    expect(data["argument-hint"]).toBeUndefined();
+  });
+
+  it("runs the reviewer role through the board and its tools, not slash commands", () => {
+    const { body } = frontmatter(PROMPT);
+    expect(body).toContain("kanban_list");
+    expect(body).toContain("kanban_comment");
+    expect(body).toContain("wrong_owner");
+    expect(body).not.toMatch(/\/kanban init/);
+    expect(body).not.toMatch(/\/kanban validate/);
+  });
+});
+
 describe("package.json ships the resources", () => {
   let pkg: {
     version: string;
@@ -96,8 +153,12 @@ describe("package.json ships the resources", () => {
     pkg = JSON.parse(read("package.json")) as typeof pkg;
   });
 
-  it("is version 0.4.1", () => {
-    expect(pkg.version).toBe("0.4.1");
+  it("is version 0.5.0", () => {
+    expect(pkg.version).toBe("0.5.0");
+  });
+
+  it("ships every prompt file the glob will discover", () => {
+    expect(pkg.pi.prompts).toEqual(["./prompts/*.md"]);
   });
 
   it("declares pi.skills and pi.prompts next to the extension", () => {
@@ -108,7 +169,9 @@ describe("package.json ships the resources", () => {
     expect(pkg.pi.extensions).toContain("./src/index.ts");
     // The declared roots really exist in the package.
     expect(existsSync(join(ROOT, "skills/kanban/SKILL.md"))).toBe(true);
+    expect(existsSync(join(ROOT, "skills/kanban-setup/SKILL.md"))).toBe(true);
     expect(existsSync(join(ROOT, "prompts/standup.md"))).toBe(true);
+    expect(existsSync(join(ROOT, "prompts/review.md"))).toBe(true);
   });
 
   it("includes skills/** and prompts/** in the published files", () => {

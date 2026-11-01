@@ -111,8 +111,8 @@ The body may contain headings, lists, and code fences (up to 20,000 characters).
 ## When to load the references
 
 - `references/coordination.md` — the claim lifecycle, handoff patterns, reading a
-  takeover's `why`, recovering a stale owner with `/kanban validate --stale`, and
-  the `rev` / optimistic-concurrency workflow with a concrete example.
+  takeover's `why`, recovering a stale owner, and the `rev` / optimistic-
+  concurrency workflow with a concrete example.
 - `references/workflow-authoring.md` — how to author `.pi/kanban/workflow.yaml`:
   statuses, active vs terminal, and declared transitions, plus the rules the
   loader enforces.

@@ -269,17 +269,38 @@ Task files are documented in [docs/task-file.md](docs/task-file.md).
 
 ## Skills and prompts
 
-The package ships a skill and a prompt template beside the extension, so an
-installed board arrives with the conventions its agents need:
+The package ships two skills and two prompt templates beside the extension, so an
+installed board arrives with the conventions its agents need. Each covers one
+role and points at the references rather than repeating them.
+
+**Skills** — loaded by the model when their description matches (or forced by a
+human with `/skill:<name>`):
 
 - `skills/kanban/SKILL.md` — the working agreement: read the board with
   `kanban_list` before claiming, claim by moving into an `active` status, carry a
   `reason` on a takeover, and comment when you stop. `skills/kanban/references/`
-  holds the task-file, workflow, and recovery details the skill points at.
-- `prompts/standup.md` — a `/standup` template that reads the board and reports
-  what each handle holds, what has gone stale, and what is waiting.
+  holds the coordination and workflow-authoring details it points at.
+- `skills/kanban-setup/SKILL.md` — the **maintainer** role: author
+  `.pi/kanban/workflow.yaml` for the real project with ordinary file tools, check
+  it by listing the board, and commit it. Load it when a project needs its first
+  board or when kanban calls fail because the workflow is missing or invalid.
 
-Both live at conventional paths, are declared in `package.json` (`pi.skills`,
+**Prompt templates** — typed by a human as `/review`, `/standup`; Pi expands the
+body and hands it to the agent, so each body is written for the agent to perform
+with tools, never as a command for it to run:
+
+- `prompts/review.md` — the **reviewer** role: clear the tasks in the project's
+  review-like statuses, review the actual change, comment the verdict, and move
+  each task to where it belongs. It respects `wrong_owner` instead of forcing
+  other agents' claims.
+- `prompts/standup.md` — the **handoff** step: report what each handle holds, what
+  has gone stale, and what is waiting, for a handle or the whole board.
+
+Together they cover the loop: set the board up, work and claim tasks, review them,
+and stand up. Every one reads from the board (`kanban_list`) rather than from
+memory, and none hand-edits `status` or `assignee`.
+
+All live at conventional paths, are declared in `package.json` (`pi.skills`,
 `pi.prompts`) and shipped in the tarball (`files`), so `pi install` discovers them
 with no project-side copying.
 

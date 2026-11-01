@@ -28,9 +28,9 @@ ages. Then gather only the slices you need:
   it is recent. Report the ones from this window, not the whole archive.
 - **Stale claims.** Flag any claim older than 24 h using the claim age already in
   the rows. A claim never expires on its own, so a stale one is a decision for a
-  human or a takeover, not a cleanup you perform silently. (For a fuller check,
-  `/kanban validate --stale 24h` reports `stale_claim` warnings; it is inspection
-  only.)
+  human or a takeover, not a cleanup you perform silently. Do not try to run a
+  stale-check command; the age in each row is the signal, and reporting it is
+  enough.
 
 Write it short and scannable — a heading per section and one bullet per task,
 with the task id, status, owner, and claim age. If you had to take over or
