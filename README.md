@@ -1,5 +1,7 @@
 # pi-minimal-kanban
 
+English | [简体中文](./docs/README.zh-CN.md)
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/tychenjiajun/pi-minimal-kanban/main/assets/preview.png" alt="pi-minimal-kanban: a file-backed Kanban board for Pi agents — exclusive claims, declared workflows, tasks as Markdown" width="880">
 </p>

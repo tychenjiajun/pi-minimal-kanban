@@ -96,8 +96,8 @@ describe("package.json ships the resources", () => {
     pkg = JSON.parse(read("package.json")) as typeof pkg;
   });
 
-  it("is version 0.4.0", () => {
-    expect(pkg.version).toBe("0.4.0");
+  it("is version 0.4.1", () => {
+    expect(pkg.version).toBe("0.4.1");
   });
 
   it("declares pi.skills and pi.prompts next to the extension", () => {

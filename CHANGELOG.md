@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.1 — 简体中文 README
+
+2026-11-01. A documentation release: the package gains a Simplified Chinese
+README beside the English one, so the working agreement is readable to the
+Chinese-speaking agents and humans who install it. No code, no metadata, no
+board change.
+
+### Added
+
+- **`docs/README.zh-CN.md`** — a full translation of `README.md`: the pitch,
+  install commands, tools table, `/kanban` surface, claim and forced-assignment
+  rules, workflow YAML, files layout, skills and prompts, design notes, and the
+  FAQ. Every tool name, error code, env var, and example is kept verbatim, so a
+  Chinese reader and an English reader debug the same board.
+
+### Changed
+
+- **`README.md` links to it.** A language switcher (`English | 简体中文`) sits
+  under the title, matching the sibling pi packages.
+
+### Compatibility
+
+- **Nothing to migrate.** `files` already ships `docs/**`, so the new README
+  travels in the tarball from the next publish; the extension, the tool surface,
+  and the on-disk board format are untouched.
+
 ## 0.4.0 — `/kanban` reads, the tools write
 
 2026-11-01. The command surface loses its last two mutating subcommands, so
