@@ -337,13 +337,15 @@ function assertFresh(task: Task, expectedRev: number | undefined): void {
 /**
  * The release sentence shared by `wrong_owner` and `already_assigned` hints
  * (design §4). The message stays one sentence and never names the caller's
- * target status; the hint is one paragraph naming both release paths.
+ * target status; the hint is one paragraph naming the release call an agent
+ * can make. `/kanban` is read-only (0.4.0), so the call is the only path.
  */
 function releaseHint(task: Task, agent: string): string {
-  // Exact hint text from design §4: names the release command and the exact
-  // force call an agent can make.
+  // Exact hint text from design §4: names the exact force call an agent can
+  // make. The task id stays in the signature for callers that format it.
   void agent;
-  return `Release it with /kanban release ${task.id} --yes, or pass force: true to take over. An agent can call kanban_assign with assignee:null, force:true.`;
+  void task.id;
+  return "Release it with kanban_assign {assignee: null, force: true}, or pass force: true to take over.";
 }
 
 /** ` for 3d`: every refusal names how long the task has been held (design §4). */
@@ -681,8 +683,10 @@ export async function assignTask(
 }
 
 /**
- * Release a claim: `kanban_assign {assignee: null, force: true}` sugar, used by
- * `/kanban release`. Records a forced unassignment in history (ADR 0004).
+ * Release a claim: the `kanban_assign {assignee: null, force: true}` call, as a
+ * store helper for direct callers and tests. `/kanban` does not expose it since
+ * 0.4.0 (the command is read-only). Records a forced unassignment in history
+ * (ADR 0004).
  */
 export interface ReleaseInput {
   task: string;
@@ -860,7 +864,7 @@ function staleClaimProblem(
   // Strictly older than the threshold, matching "older than 24h".
   if (age <= staleAfterMs) return undefined;
   const threshold = formatThreshold(staleAfterMs);
-  const release = `Release it with /kanban release ${task.id} --yes.`;
+  const release = "Release it with kanban_assign {assignee: null, force: true}.";
   // An active status is a real claim; anywhere else it is only an assignment,
   // and the warning has to say why that still matters: it blocks the move that
   // would create the claim.

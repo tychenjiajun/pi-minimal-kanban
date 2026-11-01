@@ -1,6 +1,6 @@
 {
   "name": "pi-minimal-kanban",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "Jiajun Chen <tychenjiajun@live.cn>",
   "type": "module",
   "description": "Minimal file-backed Kanban for Pi agents: project-specific workflows, exclusive task claims, and a /kanban board view.",
@@ -39,6 +39,8 @@
   "files": [
     "src/**/*.ts",
     "!src/test/**",
+    "skills/**",
+    "prompts/**",
     "docs/**",
     "assets/**",
     "GLOSSARY.md",
@@ -48,6 +50,12 @@
   "pi": {
     "extensions": [
       "./src/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts/*.md"
     ],
     "image": "https://raw.githubusercontent.com/tychenjiajun/pi-minimal-kanban/main/assets/preview.png",
     "video": "https://raw.githubusercontent.com/tychenjiajun/pi-minimal-kanban/main/assets/demo.mp4"

@@ -1,8 +1,8 @@
 /**
  * T-0006: a claim left by a departed agent must be visible and releasable.
  * Claim age is shown wherever an assignee is; `validate` reports a stale claim
- * as a warning; `wrong_owner` names the release call; `/kanban release` is the
- * one human-initiated exception to "the command never edits the board".
+ * as a warning; `wrong_owner` names the release call. Since 0.4.0 `/kanban` is
+ * read-only, so the release path is `kanban_assign {assignee: null, force: true}`.
  */
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
@@ -176,7 +176,7 @@ describe("validate warning rendering", () => {
     expect(text).toContain("Board is valid (1 warning).");
     expect(text).not.toContain("Board has problems.");
     expect(text).toContain("stale_claim: Claimed by \"coder-1\" for 3d (threshold 24h).");
-    expect(text).toContain("/kanban release T-0001 --yes.");
+    expect(text).toContain("Release it with kanban_assign {assignee: null, force: true}.");
     // Every line stays inside the 76-column budget.
     for (const line of text.split("\n")) expect(line.length).toBeLessThanOrEqual(76);
   });
@@ -212,31 +212,17 @@ describe("wrong_owner names the release call", () => {
     // The message is one sentence ending in a period and omits the target status.
     expect((envelope.error as string).trim().endsWith(".")).toBe(true);
     expect(envelope.error).not.toContain('"done"');
-    expect(envelope.hint).toContain(`/kanban release ${id} --yes`);
-    expect(envelope.hint).toContain("kanban_assign with assignee:null, force:true");
+    expect(envelope.hint).toContain("Release it with kanban_assign {assignee: null, force: true}");
+    expect(envelope.hint).toContain("or pass force: true to take over");
   });
 });
 
-describe("/kanban release", () => {
-  it("prints a confirmation and writes nothing without --yes", async () => {
-    const { board, id } = await claimedBoard();
-    const before = readFileSync(join(board.tasksDir, `${id}.md`), "utf8");
-    const { ctx, messages } = ctxFor(board.root);
-    await handleKanbanCommand(`release ${id}`, ctx);
-    const after = readFileSync(join(board.tasksDir, `${id}.md`), "utf8");
-    expect(after).toBe(before);
-    expect(messages[0]).toContain(`Release the claim on ${id}?`);
-    expect(messages[0]).toContain("owner   @coder-1");
-    expect(messages[0]).toContain(`/kanban release ${id} --yes`);
-  });
-
-  it("clears the assignee, bumps rev, and records a forced unassign with --yes", async () => {
+describe("releaseTask is kanban_assign {assignee: null, force: true}", () => {
+  it("clears the assignee, bumps rev, and records a forced unassign", async () => {
     const { board, id } = await claimedBoard();
     const before = readTask(board, id);
-    const { ctx, messages } = ctxFor(board.root);
-    await handleKanbanCommand(`release ${id} --yes --as human`, ctx);
+    const after = await releaseTask(board, { task: id, agent: "human" }, { now: () => new Date("2026-10-04T00:00:00.000Z") });
 
-    const after = readTask(board, id);
     expect(after.assignee).toBeUndefined();
     expect(after.rev).toBe(before.rev + 1);
     const last = after.history[after.history.length - 1];
@@ -244,18 +230,20 @@ describe("/kanban release", () => {
     expect(last.by).toBe("human");
     expect(last.assignee).toBe("coder-1");
     expect(last.forced).toBe(true);
-
-    expect(messages[0]).toContain(`Released ${id}.`);
-    expect(messages[0]).toContain("now  unassigned");
+    expect(readTask(board, id).assignee).toBeUndefined();
   });
 
-  it("refuses a task that has no claim", async () => {
+  it("writes nothing when the task has no claim to release", async () => {
     const { board, id } = await claimedBoard();
     await releaseTask(board, { task: id, agent: "human" }); // first release
-    const { ctx, messages } = ctxFor(board.root);
-    await handleKanbanCommand(`release ${id} --yes`, ctx);
-    expect(messages[0]).toContain(`${id} has no claim to release.`);
-    expect(messages[0]).toContain("owner   -");
+    const cleared = readTask(board, id);
+    const before = readFileSync(join(board.tasksDir, `${id}.md`), "utf8");
+
+    // A second release is a no-op on the file, not a new history entry.
+    await releaseTask(board, { task: id, agent: "human" });
+
+    expect(readTask(board, id).rev).toBe(cleared.rev);
+    expect(readFileSync(join(board.tasksDir, `${id}.md`), "utf8")).toBe(before);
   });
 
   it("keeps the release helper equal to kanban_assign {assignee:null, force:true}", async () => {
@@ -363,8 +351,10 @@ describe("third-party assignment is forced", () => {
     expect(envelope.error).toBe(
       'Task T-0001 is assigned to "coder-1"; "coder-1" cannot assign it to "coder-2" without force.',
     );
-    // The holder here is the caller, so the hint cannot name a release.
+    // The holder here is the caller, so the hint must not name the old, now
+    // removed, `/kanban release` command; it names the force path instead.
     expect(envelope.hint).not.toContain("/kanban release");
+    expect(envelope.hint).toContain("force: true");
     expect(readTask(board, "T-0001").assignee).toBe("coder-1");
   });
 

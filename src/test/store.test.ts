@@ -393,7 +393,8 @@ describe("validateBoard", () => {
     expect(stale?.severity).toBe("warning");
     expect(stale?.message).toContain('Claimed by "coder-1" for 3d');
     expect(stale?.message).toContain("(threshold 24h)");
-    expect(stale?.message).toContain("/kanban release T-0001 --yes");
+    expect(stale?.message).toContain("Release it with kanban_assign {assignee: null, force: true}.");
+    expect(stale?.message).not.toContain("/kanban release");
     // A warning alone never flips the report.
     expect(report.ok).toBe(true);
   });

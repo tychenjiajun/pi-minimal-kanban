@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// `/kanban` — the extension's only UI.
+// `/kanban` — the extension's only UI, and it only reads.
 //
 //   /kanban                 the board
 //   /kanban T-0007          one task in full
@@ -9,53 +9,43 @@
 //   /kanban validate        report workflow drift and claim problems
 //   /kanban status <id>     only tasks in one status
 //   /kanban mine <handle>   only tasks assigned to a handle
-//   /kanban release <id>    release a claim (the one mutating subcommand)
-//   /kanban repair-ids      rename task files to the ids they declare
 //
 // Rendering is plain text sent to the transcript: scrollable, copyable, and it
-// works in headless and RPC modes. `release` is the one exception; everything
-// else only renders.
+// works in headless and RPC modes. Every subcommand renders; board writes
+// belong to the five tools (kanban_create, kanban_move, kanban_comment,
+// kanban_assign, kanban_list), so `/kanban` can never mutate board state.
 // ---------------------------------------------------------------------------
 
-import { existsSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { KanbanError } from "./errors.ts";
 import { FILES, displayPath, resolveBoard, type BoardLocation } from "./paths.ts";
 import {
   DEFAULT_STALE_CLAIM_MS,
-  claimAgeMs,
   initBoard,
   parseStaleDuration,
-  planRepairIds,
   readBoard,
-  readCounterValue,
   readTask,
-  listTaskIds,
-  repairIds,
-  repairRefusal,
   detail,
-  releaseTask,
   validateBoard,
-  type RepairPlan,
 } from "./store.ts";
-import { formatAge, formatThreshold, renderBoard, renderTask, renderTaskRows, truncate } from "./render.ts";
-import { parseTaskFile } from "./task-file.ts";
+import { formatThreshold, renderBoard, renderTask, renderTaskRows, truncate } from "./render.ts";
 import { workflowToJson } from "./workflow.ts";
 import type { Task, ValidationProblem } from "./types.ts";
 
 export const USAGE = [
   "Usage  /kanban [task-id] [--all] [--json]",
   "       /kanban status <id> | mine <handle> | validate [--stale 24h]",
-  "       /kanban release <task-id> [--yes] [--as <handle>]",
-  "       /kanban repair-ids [--dry-run | --yes] [--as <handle>]",
   "       /kanban init | help",
   "",
   "  Moving a task into an active (◆) status claims it for your handle; only",
-  "  that handle can move or release it without force: true.",
+  "  that handle can move it, or clear the claim, without force: true.",
   "  A terminal status releases the claim; a claim never expires on its own.",
   "  Handles are self-asserted names like coder-1; the board does not check",
   "  them. Assigning a task to another handle needs force: true as well.",
+  "  This command only reads: to change the board, call the kanban_* tools",
+  "  (kanban_assign with assignee: null and force: true clears a claim).",
   "  Start with kanban_list: it shows rev, status, and claim age.",
   "  Completions use this session's board and list task ids and handles;",
   "  with no board they complete only the subcommands.",
@@ -63,12 +53,12 @@ export const USAGE = [
 
 interface ParsedArgs {
   flags: Set<string>;
-  /** Flags that take a value, e.g. `--stale 24h` or `--as human`. */
+  /** Flags that take a value, e.g. `--stale 24h`. */
   values: Map<string, string>;
   positional: string[];
 }
 
-const VALUED_FLAGS = new Set(["stale", "as"]);
+const VALUED_FLAGS = new Set(["stale"]);
 
 function parseArgs(input: string): ParsedArgs {
   const flags = new Set<string>();
@@ -133,20 +123,6 @@ export async function handleKanbanCommand(input: string, ctx: ExtensionCommandCo
 
     if (!existsSync(join(location.dir, FILES.tasks)) && !existsSync(location.dir)) {
       say(`No board here.\n  ${location.dir}\n\nRun /kanban init to create one.`);
-      return;
-    }
-
-    if (command === "release") {
-      if (!argument) {
-        say("Usage: /kanban release <task-id> [--yes] [--as <handle>]");
-        return;
-      }
-      say(await renderRelease(location, argument, flags, values));
-      return;
-    }
-
-    if (command === "repair-ids") {
-      say(await renderRepairIds(location, flags, values, ctx.cwd));
       return;
     }
 
@@ -287,263 +263,6 @@ export function renderValidationReport(
   return lines.join("\n");
 }
 
-// ─── release ───────────────────────────────────────────────────────────────
-
-function claimAgeForDisplay(task: Task): string | undefined {
-  return task.active && task.assignee ? formatAge(task.claimAgeMs ?? 0) : undefined;
-}
-
-async function renderRelease(
-  location: BoardLocation,
-  id: string,
-  flags: Set<string>,
-  values: Map<string, string>,
-): Promise<string> {
-  const task = readTask(location, id);
-  const known = task.status;
-  const claimed = Boolean(task.assignee);
-  const age = claimAgeForDisplay(task);
-
-  // No claim: there is nothing to release. This is a refusal, not a prompt, so
-  // it prints the real status: the drift marker belongs to the release result.
-  if (!claimed) {
-    return [`${task.id} has no claim to release.`, "", `  status  ${known}`, `  owner   -`].join("\n");
-  }
-
-  const operator = resolveOperator(values.get("as"));
-
-  if (!flags.has("yes")) {
-    // A confirmation, never a write. Applies to claims and plain assignments.
-    const verb = task.active ? "claim" : "assignment";
-    const lines = [`Release the ${verb} on ${task.id}?`, ""];
-    lines.push(`  owner   @${task.assignee}`);
-    if (task.active) {
-      lines.push(`  claimed ${age ?? "0s"}`);
-    } else {
-      lines.push(`  since   ${task.updated}`);
-    }
-    lines.push(`  status  ${known}`, `  rev     ${task.rev}`);
-    lines.push("", `This records an unassign by "${operator}" in the task history.`);
-    lines.push(`Re-run with --yes to confirm:  /kanban release ${task.id} --yes`);
-    return lines.join("\n");
-  }
-
-  const released = await releaseTask(location, { task: id, agent: operator });
-  const nowStatus = released.drifted ? `${released.status} ⚠` : released.status;
-  const wasAge = age ? `  ${age}` : "";
-  return [
-    `Released ${released.id}.`,
-    "",
-    `  was  @${task.assignee}${wasAge}  ${known}`,
-    `  now  unassigned  ${nowStatus}  rev ${released.rev}`,
-  ].join("\n");
-}
-
-/** `--as`, else `PI_KANBAN_HANDLE`, else `human`. */
-function resolveOperator(explicit: string | undefined): string {
-  const handle = explicit ?? process.env.PI_KANBAN_HANDLE ?? "human";
-  const trimmed = handle.trim();
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(trimmed)) {
-    throw new KanbanError(
-      "invalid_handle",
-      `Invalid operator handle "${handle}": use 1-64 characters from A-Z, a-z, 0-9, dot, underscore, or hyphen, starting with a letter or digit.`,
-      "Pass --as <handle> or set PI_KANBAN_HANDLE.",
-    );
-  }
-  return trimmed;
-}
-
-// ─── repair-ids ────────────────────────────────────────────────────────────
-
-const REPAIR_DIR_WIDTH = 30;
-const REPAIR_DIR_KEEP = 27;
-
-/** `displayPath`, shortened from the left so the board's own name survives. */
-function shortBoardDir(dir: string, cwd: string): string {
-  const shown = displayPath(dir, cwd);
-  return shown.length > REPAIR_DIR_WIDTH ? `...${shown.slice(-REPAIR_DIR_KEEP)}` : shown;
-}
-
-/** Greedy 76-column wrap; every line of every repair block stays inside it. */
-function wrapParagraph(text: string, width = 76): string[] {
-  const lines: string[] = [];
-  let line = "";
-  for (const word of text.split(/\s+/).filter(Boolean)) {
-    if (!line) line = word;
-    else if (`${line} ${word}`.length <= width) line = `${line} ${word}`;
-    else {
-      lines.push(line);
-      line = word;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
-/** The highest id once the plan is applied, as `T-0009`. */
-function highestIdLabel(location: BoardLocation, plan: RepairPlan): string {
-  const ids = [
-    ...listTaskIds(location).map((id) => Number(id.slice(2))),
-    ...plan.renames.map((rename) => Number(rename.declaredId.slice(2))),
-  ];
-  const highest = ids.length > 0 ? Math.max(...ids) : 0;
-  return `T-${String(highest).padStart(4, "0")}`;
-}
-
-/** The title a rename line shows: the file's own, read before or after the move. */
-function repairTitle(rename: RepairPlan["renames"][number]): string {
-  for (const path of [rename.path, rename.target]) {
-    try {
-      const title = parseTaskFile(readFileSync(path, "utf8"), path).frontmatter.title;
-      return typeof title === "string" ? title.trim() : "";
-    } catch {
-      /* the other path is the only one that exists, before or after the move */
-    }
-  }
-  return "";
-}
-
-/** `1 file was skipped and needs a hand edit:` and its rows, when any. */
-function skippedBlock(plan: RepairPlan): string[] {
-  if (plan.skipped.length === 0) return [];
-  const n = plan.skipped.length;
-  const heading =
-    n === 1
-      ? "1 file was skipped and needs a hand edit:"
-      : `${n} files were skipped and need a hand edit:`;
-  return ["", heading, ...plan.skipped.map((entry) => `  ${basename(entry.path)}  ${entry.message}`)];
-}
-
-/** §5.4: nothing to repair at all. */
-function renderNothingToRepair(location: BoardLocation, plan: RepairPlan, cwd: string): string {
-  const current = plan.counter?.from ?? readCounterValue(location) ?? 1;
-  const lines = [
-    "Nothing to repair: every frontmatter id matches its filename.",
-    "",
-    `  board    ${shortBoardDir(plan.dir, cwd)}`,
-    `  counter  next ${current}, above the highest id ${highestIdLabel(location, plan)}`,
-    "",
-    "Nothing written.",
-    ...skippedBlock(plan),
-  ];
-  return lines.join("\n");
-}
-
-/** §5.2: the plan, with the mode in the header and nothing written. */
-function renderRepairPlan(location: BoardLocation, plan: RepairPlan, cwd: string, dryRun: boolean): string {
-  const mode = dryRun ? "dry run: nothing written" : "nothing written";
-  const lines = [`Repair task ids  ${shortBoardDir(plan.dir, cwd)}  (${mode})`, ""];
-
-  for (const rename of plan.renames) {
-    lines.push(`  rename  ${basename(rename.path)} -> ${basename(rename.target)}`);
-    lines.push(`${" ".repeat(10)}id: ${rename.declaredId}  ${repairTitle(rename)}`);
-  }
-
-  const highest = highestIdLabel(location, plan);
-  if (plan.counter) {
-    lines.push(`  counter next ${plan.counter.from} -> ${plan.counter.to}  (raised above the highest id ${highest})`);
-  } else {
-    const current = readCounterValue(location) ?? 1;
-    lines.push(`  counter next ${current} is already above ${highest}; left unchanged`);
-  }
-  lines.push("");
-
-  const n = plan.renames.length;
-  const would = `${n} file${n === 1 ? "" : "s"} would be renamed.`;
-  const written = dryRun ? `${would} Nothing was written. Re-run with --yes to apply.` : would;
-  if (n > 0) {
-    lines.push(
-      ...wrapParagraph(`${written} Docs and comments that mention ${plan.renames[0].filenameId} are not rewritten.`),
-    );
-  } else {
-    lines.push(...wrapParagraph(written));
-  }
-  if (!dryRun) lines.push(`Re-run with --yes to confirm:  /kanban repair-ids --yes`);
-  lines.push(...skippedBlock(plan));
-  return lines.join("\n");
-}
-
-/** §5.3: what `--yes` did. */
-function renderRepairApplied(
-  location: BoardLocation,
-  plan: RepairPlan,
-  operator: string,
-): string {
-  const highest = highestIdLabel(location, plan);
-  const count = plan.renames.length || 1;
-  const lines = [`Repaired ${count} task id${count === 1 ? "" : "s"}.`, ""];
-  for (const rename of plan.renames) {
-    lines.push(`  renamed  ${basename(rename.path)} -> ${basename(rename.target)}   id: ${rename.declaredId}`);
-  }
-  if (plan.counter) {
-    lines.push(`  counter  next ${plan.counter.from} -> ${plan.counter.to}  (raised above the highest id ${highest})`);
-  } else {
-    const current = readCounterValue(location) ?? 1;
-    lines.push(`  counter  next ${current}, above the highest id ${highest}  (unchanged)`);
-  }
-  lines.push(`  by       @${operator}`, "", "Run /kanban validate to confirm the board is clean.");
-  lines.push(...skippedBlock(plan));
-  return lines.join("\n");
-}
-
-/** §5.4: both flags at once, or a plan that cannot be applied. */
-function renderRepairRefusal(refusal: NonNullable<ReturnType<typeof repairRefusal>>): string {
-  if (refusal.kind === "duplicate") {
-    return [
-      "Cannot repair: two files declare the same id.",
-      "",
-      ...refusal.entries.map((entry) => `  ${entry.filename}  declares ${entry.declaredId}`),
-      "",
-      "Nothing written. Fix one of the two frontmatter ids by hand, then re-run.",
-    ].join("\n");
-  }
-  const { entry } = refusal;
-  return [
-    `Cannot repair: ${entry.existing} already exists and ${entry.filename} declares id ${entry.declaredId}.`,
-    "",
-    `  ${entry.filename}  declares ${entry.declaredId}`,
-    `  ${entry.existing}  already uses that name`,
-    "",
-    "Nothing written. Rename or delete one of them by hand, then re-run.",
-  ].join("\n");
-}
-
-const BOTH_REPAIR_FLAGS = [
-  "/kanban repair-ids takes one of two flags.",
-  "",
-  "  --dry-run  print the plan and write nothing",
-  "  --yes      apply the plan, under the board lock",
-  "",
-  "Both at once is ambiguous; nothing was written.",
-].join("\n");
-
-/** `/kanban repair-ids`: plan, apply, refuse, or report nothing to do. */
-async function renderRepairIds(
-  location: BoardLocation,
-  flags: Set<string>,
-  values: Map<string, string>,
-  cwd: string,
-): Promise<string> {
-  if (flags.has("dry-run") && flags.has("yes")) return BOTH_REPAIR_FLAGS;
-
-  const operator = resolveOperator(values.get("as"));
-  const dryRun = flags.has("dry-run");
-
-  if (flags.has("yes")) {
-    const { plan, applied } = await repairIds(location, operator);
-    if (applied) return renderRepairApplied(location, plan, operator);
-    const refusal = repairRefusal(plan);
-    if (refusal) return renderRepairRefusal(refusal);
-    return renderNothingToRepair(location, plan, cwd);
-  }
-
-  const plan = planRepairIds(location);
-  const refusal = repairRefusal(plan);
-  if (refusal) return renderRepairRefusal(refusal);
-  if (plan.renames.length === 0 && !plan.counter) return renderNothingToRepair(location, plan, cwd);
-  return renderRepairPlan(location, plan, cwd, dryRun);
-}
-
 // ─── lists ─────────────────────────────────────────────────────────────────
 /**
  * `/kanban status` shows one status, so its rows carry no status cell: the
@@ -571,8 +290,6 @@ const COMPLETION_DESCRIPTION_WIDTH = 64;
 const SUBCOMMANDS = [
   { label: "init", description: "Create .pi/kanban/workflow.yaml" },
   { label: "validate", description: "Check the workflow and task claims" },
-  { label: "release", description: "Release a task's claim (writes)" },
-  { label: "repair-ids", description: "Rename task files to their declared ids (writes)" },
   { label: "--all", description: "Expand terminal columns" },
   { label: "--json", description: "Print the board as JSON" },
   { label: "status", description: "Filter by status id" },

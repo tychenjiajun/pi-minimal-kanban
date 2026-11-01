@@ -47,12 +47,13 @@ Please add a test for the timeout path.
 | `history` | yes | Append-only list of `create`, `move`, `assign`, `force-assign`, and `unassign`. |
 | `history[].reason` | no | Why a forced takeover happened: one line, 1-200 characters. Written by `kanban_assign`/`kanban_move` when `force` is true. |
 
-An `unassign` entry written by `/kanban release` or a forced `kanban_assign`
-carries `forced: true`, so the history shows the release was not the owner's
-own act. A `force-assign` may also carry `reason`: the last key of the entry,
-printed under the entry as a `why` line in `/kanban <task-id>`. A file written
-before 0.3.0 has no `reason` key, still parses, and re-serializes unchanged; a
-takeover without one is only a `unannotated_forced` warning in `validate`.
+An `unassign` entry written by a forced `kanban_assign` (or, before 0.4.0, by
+`/kanban release`) carries `forced: true`, so the history shows the release was
+not the owner's own act. A `force-assign` may also carry `reason`: the last key of
+the entry, printed under the entry as a `why` line in `/kanban <task-id>`. A file
+written before 0.3.0 has no `reason` key, still parses, and re-serializes
+unchanged; a takeover without one is only a `unannotated_forced` warning in
+`validate`.
 
 The claim age shown in `/kanban` and `kanban_list` is measured from the
 last `assign`/`force-assign` to the current assignee, so hand-editing `assignee`

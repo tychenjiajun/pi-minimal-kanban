@@ -30,7 +30,7 @@ Several agents share one project's work without stepping on each other:
   `force`, and a forced takeover can carry the `reason` that makes it auditable.
 - **Files only.** No database, no server, no daemon. Tasks are Markdown files
   you can read, diff, and commit.
-- **Minimal UI.** Five tools and one `/kanban` command that renders plain text.
+- **Minimal UI.** Five tools and one read-only `/kanban` command that renders plain text.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/tychenjiajun/pi-minimal-kanban/main/assets/demo.gif" alt="Two agents duplicate work; with the board, one claims the task, the other gets wrong_owner, and a forced takeover records why" width="760">
@@ -142,22 +142,20 @@ the file it could not read.
 /kanban validate --stale 12h  warn about claims older than 12h
 /kanban status <id>         only tasks in one status
 /kanban mine <handle>       only tasks assigned to a handle
-/kanban release <id>        release a claim (asks for --yes; repair-ids writes too)
-/kanban repair-ids          rename task files to the ids they declare (writes)
 ```
 
 Rendering is plain text in the transcript — scrollable and copyable, and it works
-in headless and RPC modes. Everything renders read-only except `release` and
-`repair-ids`:
-`/kanban release <id>` clears a claim and records a forced unassignment in the
-task's history. It asks for `--yes` before writing; `--as <handle>` names the
-operator recorded as `by` (default `PI_KANBAN_HANDLE`, else `human`).
+in headless and RPC modes. **Every subcommand reads.** No `/kanban` form writes to
+the board: mutations belong to the five tools, so the command is always safe to
+run in a review, a demo, or a read-only session. Clearing a claim, for example,
+is `kanban_assign {task: "T-0003", assignee: null, force: true}`.
 
 `/kanban help` (or `/kanban --help`) prints a 14-line card, not a manual: the
 claim rule (moving into an active `◆` status claims the task for your handle),
 that a terminal status releases the claim and a claim never expires on its own,
 that handles are self-asserted names the board does not verify, that assigning a
-task to another handle needs `force: true`, and where completions look.
+task to another handle needs `force: true`, that the command only reads and the
+`kanban_*` tools write, and where completions look.
 
 Tab completion lists the subcommands, the task ids on this session's board (with
 status and title), and the handles the board has seen — up to 20 task ids and 10
@@ -166,12 +164,11 @@ the subcommands.
 
 `/kanban validate` also reports a task whose frontmatter `id` disagrees with its
 filename, an unreadable task file (`unreadable_task`), and a `counter.json` value
-that would reissue an existing task id. `/kanban repair-ids` fixes exactly the
-first and last of those: it renames a file to the id its frontmatter declares
-(never the reverse — an issued id is never discarded) and raises a low counter,
-never lowers one. A `T-0007` mentioned in a description or a comment stays as
-written: prose is not rewritten. `--dry-run` prints the plan and writes nothing;
-`--yes` takes the board lock, re-plans under it, and applies.
+that would reissue an existing task id. `/kanban validate` reports those two but
+never fixes them, because the command does not write: rename the file to the id
+its frontmatter declares (never the reverse — an issued id is never discarded)
+and raise a low counter by hand, never lower it. A `T-0007` mentioned in a
+description or a comment stays as written: prose is not rewritten.
 
 A claim older than the threshold (24 h by
 default, overridable with `--stale` or `PI_KANBAN_STALE_MS`, alias
@@ -193,9 +190,10 @@ an assignee in any other status is an assignment, not a claim, and has no age.
 
 A claim never expires on its own. When its owner has gone quiet:
 
-- `/kanban release T-0003` prints a confirmation and writes nothing;
-  `/kanban release T-0003 --yes` clears the claim and bumps `rev`.
-- From an agent: `kanban_assign {task: "T-0003", assignee: null, force: true}`.
+- From an agent: `kanban_assign {task: "T-0003", assignee: null, force: true}`
+  clears the claim, records the unassignment in history, and bumps `rev`.
+- `/kanban` shows the claim and its age; it never clears one. A stale claim is
+  reported by `/kanban validate`, and released by that tool call.
 
 ## Assignment is exclusive, and third-party assignment is forced
 
@@ -267,13 +265,29 @@ the JSON form.
 
 Task files are documented in [docs/task-file.md](docs/task-file.md).
 
+## Skills and prompts
+
+The package ships a skill and a prompt template beside the extension, so an
+installed board arrives with the conventions its agents need:
+
+- `skills/kanban/SKILL.md` — the working agreement: read the board with
+  `kanban_list` before claiming, claim by moving into an `active` status, carry a
+  `reason` on a takeover, and comment when you stop. `skills/kanban/references/`
+  holds the task-file, workflow, and recovery details the skill points at.
+- `prompts/standup.md` — a `/standup` template that reads the board and reports
+  what each handle holds, what has gone stale, and what is waiting.
+
+Both live at conventional paths, are declared in `package.json` (`pi.skills`,
+`pi.prompts`) and shipped in the tarball (`files`), so `pi install` discovers them
+with no project-side copying.
+
 ## Design notes
 
 - [GLOSSARY.md](GLOSSARY.md) — board, workflow, status, task, claim.
 - [docs/adr/](docs/adr/) — why the board lives in the repo, why workflows are
   declared, why tasks are Markdown, why claims are part of the state machine.
-- [docs/product/](docs/product/) — the product audit and backlog behind 0.2.0 and
-  0.3.0, the design spec for the tool surface, and the scope decisions,
+- [docs/product/](docs/product/) — the product audit and backlog behind 0.2.0,
+  0.3.0, and 0.4.0, the design spec for the tool surface, and the scope decisions,
   including what was deliberately deferred.
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each release.
 - [pi.dev/packages/pi-minimal-kanban](https://pi.dev/packages/pi-minimal-kanban) — the gallery page.
@@ -297,8 +311,9 @@ sessions — or two machines — touch the same project.
 
 ### What happens when an agent dies holding a task?
 Nothing expires on its own, by design: a claim is never released behind its owner's back. `/kanban`
-shows the claim's age and `/kanban validate` warns past a threshold (24 h by default); a human runs
-`/kanban release T-0003 --yes`, or another agent takes over with `force: true` and a `reason`.
+shows the claim's age and `/kanban validate` warns past a threshold (24 h by default); a human or an
+agent releases it with `kanban_assign {assignee: null, force: true}`, or another agent takes over with
+`force: true` and a `reason`.
 
 ### Why require `force` to assign a task to someone else?
 Because writing another handle's name is a coordination act the owner never consented to. Self-claims

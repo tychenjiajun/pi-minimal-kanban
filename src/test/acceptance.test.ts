@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import kanbanExtension from "../index.ts";
 import { handleKanbanCommand } from "../command.ts";
-import { assignTask, createTask, moveTask, readTask, validateBoard } from "../store.ts";
+import { assignTask, createTask, moveTask, readTask, releaseTask, validateBoard } from "../store.ts";
 import { KanbanError } from "../errors.ts";
 import { LINEAR_WORKFLOW, makeBoard, newestChangelogVersion, SEMVER, taskFile, versionsAgree } from "./helpers.ts";
 import type { BoardLocation } from "../paths.ts";
@@ -252,7 +252,7 @@ describe("T-0005: one malformed task file must not blank the board", () => {
 // ─── T-0006: stale claims and release ───────────────────────────────────────
 
 describe("T-0006: stale claims are visible and releasable", () => {
-  it("warns stale_claim for a >24h claim, keeps the report valid, and releases it on --yes", async () => {
+  it("warns stale_claim for a >24h claim, keeps the report valid, and releases it via kanban_assign", async () => {
     const board = makeBoard();
     const task = await createTask(board, { title: "Abandoned work", agent: "coder-1" });
     await moveTask(board, { task: task.id, to: "working", agent: "coder-1" });
@@ -263,7 +263,8 @@ describe("T-0006: stale claims are visible and releasable", () => {
     const stale = report.problems.find((problem) => problem.code === "stale_claim");
     expect(stale?.severity).toBe("warning");
     expect(stale?.message).toContain('Claimed by "coder-1" for 3d');
-    expect(stale?.message).toContain(`/kanban release ${task.id} --yes`);
+    expect(stale?.message).toContain("Release it with kanban_assign {assignee: null, force: true}.");
+    expect(stale?.message).not.toContain("/kanban release");
     expect(report.ok).toBe(true);
 
     const { ctx, messages } = ctxFor(board.root);
@@ -275,12 +276,8 @@ describe("T-0006: stale claims are visible and releasable", () => {
     const before = readTask(board, task.id);
     expect(before.assignee).toBe("coder-1");
 
-    const { ctx: releaseCtx, messages: releaseMessages } = ctxFor(board.root);
-    await handleKanbanCommand(`release ${task.id} --yes --as human`, releaseCtx);
-    expect(releaseMessages[0]).toContain(`Released ${task.id}.`);
-    expect(releaseMessages[0]).toContain("unassigned");
-
-    const after = readTask(board, task.id);
+    // `/kanban` is read-only: the release is the store call the hint names.
+    const after = await releaseTask(board, { task: task.id, agent: "human" });
     expect(after.assignee).toBeUndefined();
     expect(after.rev).toBe(before.rev + 1);
     const last = after.history.at(-1);
@@ -289,7 +286,7 @@ describe("T-0006: stale claims are visible and releasable", () => {
     expect(last?.by).toBe("human");
   });
 
-  it("refuses /kanban release on an unclaimed or terminal task and writes nothing", async () => {
+  it("treats /kanban release as an unknown task id and writes nothing", async () => {
     const board = makeBoard();
     const unclaimed = await createTask(board, { title: "Nobody owns me", agent: "coder-1" });
     const unclaimedPath = join(board.tasksDir, `${unclaimed.id}.md`);
@@ -298,22 +295,24 @@ describe("T-0006: stale claims are visible and releasable", () => {
     for (const input of [`release ${unclaimed.id}`, `release ${unclaimed.id} --yes`]) {
       const { ctx, messages } = ctxFor(board.root);
       await handleKanbanCommand(input, ctx);
-      expect(messages[0]).toContain("has no claim to release.");
+      // The subcommand is gone, so `release` parses as a task id and is rejected.
+      expect(messages[0]).toBe('Invalid task id "release".\n\nUse the form T-0001.');
     }
     expect(readFileSync(unclaimedPath, "utf8")).toBe(unclaimedBefore);
 
-    // A terminal task is unassigned on entry, so there is still no claim to release.
+    // A terminal task is unassigned on entry, so a release is a no-op anyway.
     const terminal = await createTask(board, { title: "Finished work", agent: "coder-1" });
     await moveTask(board, { task: terminal.id, to: "working", agent: "coder-1" });
     await moveTask(board, { task: terminal.id, to: "done", agent: "coder-1" });
     const terminalPath = join(board.tasksDir, `${terminal.id}.md`);
     const terminalBefore = readFileSync(terminalPath, "utf8");
+    const cleared = readTask(board, terminal.id);
 
-    const { ctx, messages } = ctxFor(board.root);
-    await handleKanbanCommand(`release ${terminal.id} --yes`, ctx);
-    expect(messages[0]).toContain("has no claim to release.");
-    expect(readFileSync(terminalPath, "utf8")).toBe(terminalBefore);
+    await releaseTask(board, { task: terminal.id, agent: "human" });
+
     expect(readTask(board, terminal.id).assignee).toBeUndefined();
+    expect(readTask(board, terminal.id).rev).toBe(cleared.rev);
+    expect(readFileSync(terminalPath, "utf8")).toBe(terminalBefore);
   });
 });
 
@@ -350,8 +349,8 @@ describe("T-0007: claim and rev correctness", () => {
     const kanban = error as KanbanError;
     expect(kanban.details.code).toBe("wrong_owner");
     expect(kanban.message).toContain('claimed by "coder-1" for 3d');
-    expect(kanban.details.hint).toContain(`/kanban release ${task.id} --yes`);
-    expect(kanban.details.hint).toContain("kanban_assign with assignee:null, force:true");
+    expect(kanban.details.hint).toContain("Release it with kanban_assign {assignee: null, force: true}");
+    expect(kanban.details.hint).not.toContain("/kanban release");
   });
 
   it("refuses to assign a terminal task and clears the assignee when entering a terminal status", async () => {
@@ -410,7 +409,7 @@ describe("T-0007: claim and rev correctness", () => {
     expect(loserError).toBeInstanceOf(KanbanError);
     const loser = loserError as KanbanError;
     expect(loser.details.code).toBe("wrong_owner");
-    expect(loser.details.hint).toContain(`/kanban release ${task.id} --yes`);
+    expect(loser.details.hint).toContain("Release it with kanban_assign {assignee: null, force: true}");
 
     const winner = winners[0].value as MoveOutcome;
     const after = readTask(board, task.id);

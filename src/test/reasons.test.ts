@@ -289,8 +289,10 @@ history:
       ui: { notify: (message: string) => messages.push(message) },
     } as unknown as ExtensionCommandContext;
 
-    await handleKanbanCommand("release T-0001 --yes --as human", ctx);
+    // `/kanban release` is gone in 0.4.0; the store call is the release path.
+    await releaseTask(board, { task: "T-0001", agent: "human" });
     await handleKanbanCommand("validate --stale 0", ctx);
+    expect(messages[0]).toContain("Board is valid.");
 
     const report = validateBoard(board, { staleAfterMs: 0 });
     expect(report.problems.map((problem) => problem.code)).not.toContain("unannotated_forced");

@@ -263,25 +263,9 @@ describe("T-0009: stale assignment in a non-active status", () => {
   });
 });
 
-// ─── T-0009: release refusal and list rows ──────────────────────────────────
+// ─── T-0009: list rows ──────────────────────────────────────────────────────
 
-describe("T-0009: /kanban release refusal and row formats", () => {
-  it("prints the raw status with no drift marker and writes nothing", async () => {
-    const board = makeBoard();
-    const task = await createTask(board, { title: "Nobody owns me", agent: "coder-1" });
-    const path = join(board.tasksDir, `${task.id}.md`);
-    const before = readFileSync(path, "utf8");
-
-    const { ctx, messages } = ctxFor(board.root);
-    await handleKanbanCommand(`release ${task.id} --yes`, ctx);
-    const text = messages[0];
-    expect(text).toContain("has no claim to release.");
-    expect(text).toContain("status  new");
-    expect(text).not.toContain("new ⚠");
-    expect(text).not.toContain("⚠");
-    expect(readFileSync(path, "utf8")).toBe(before);
-  });
-
+describe("T-0009: list row formats", () => {
   it("prints rev and claim age in /kanban mine and /kanban status", async () => {
     const board = makeBoard();
     const task = await createTask(board, { title: "Claimed work", agent: "coder-1" });

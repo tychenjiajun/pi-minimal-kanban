@@ -35,8 +35,8 @@ transitions:
   done: [working]
 `;
 
-/** The eight labels `/kanban` completes with no board: §7 T-0014 #3. */
-const SUBCOMMAND_LABELS = ["init", "validate", "release", "repair-ids", "--all", "--json", "status", "mine"];
+/** The six labels `/kanban` completes with no board: §7 T-0014 #3. */
+const SUBCOMMAND_LABELS = ["init", "validate", "--all", "--json", "status", "mine"];
 
 const labels = (items: Array<{ label: string }>) => items.map((item) => item.label);
 
@@ -146,8 +146,8 @@ describe("task ids and handles complete", () => {
     taskFile(board, "T-0001", taskMarkdown("T-0001", "First", "working", "coder-1"));
 
     const items = completeKanbanCommand("", board);
-    expect(labels(items).slice(0, 8)).toEqual(SUBCOMMAND_LABELS);
-    expect(labels(items)[8]).toBe("T-0001");
+    expect(labels(items).slice(0, SUBCOMMAND_LABELS.length)).toEqual(SUBCOMMAND_LABELS);
+    expect(labels(items)[SUBCOMMAND_LABELS.length]).toBe("T-0001");
     expect(labels(items)).toContain("coder-1");
   });
 
@@ -224,29 +224,33 @@ describe("order, caps, and the prefix rule", () => {
     expect(labels(completeKanbanCommand("--j", board))).toEqual(["--json"]);
   });
 
-  it("includes repair-ids in the subcommand group", () => {
+  it("no longer offers the removed mutating subcommands", () => {
     const board = makeBoard(WORKFLOW);
-    expect(labels(completeKanbanCommand("re", board))).toEqual(["release", "repair-ids"]);
+    // 0.4.0 made `/kanban` read-only: release and repair-ids are gone, so a
+    // prefix that used to match them falls back to the plain subcommand group.
+    expect(labels(completeKanbanCommand("re", board))).toEqual(SUBCOMMAND_LABELS);
+    expect(labels(completeKanbanCommand("repair", board))).not.toContain("repair-ids");
+    expect(labels(completeKanbanCommand("rel", board))).not.toContain("release");
   });
 });
 
 describe("the never-empty, never-throwing invariant", () => {
-  it("returns the 8 subcommands with no cached location", () => {
+  it("returns the 6 subcommands with no cached location", () => {
     expect(labels(completeKanbanCommand("", undefined))).toEqual(SUBCOMMAND_LABELS);
   });
 
-  it("returns the 8 subcommands for a task prefix with no cached location", () => {
+  it("returns the 6 subcommands for a task prefix with no cached location", () => {
     expect(labels(completeKanbanCommand("T-0", undefined))).toEqual(SUBCOMMAND_LABELS);
   });
 
-  it("falls back to the 8 subcommands when nothing matches", () => {
+  it("falls back to the 6 subcommands when nothing matches", () => {
     const board = makeBoard(WORKFLOW);
     taskFile(board, "T-0001", taskMarkdown("T-0001", "First", "planning"));
 
     expect(labels(completeKanbanCommand("zz", board))).toEqual(SUBCOMMAND_LABELS);
   });
 
-  it("returns the 8 subcommands for a location whose tasks directory does not exist", () => {
+  it("returns the 6 subcommands for a location whose tasks directory does not exist", () => {
     const board = makeBoard(WORKFLOW);
     rmSync(board.tasksDir, { recursive: true, force: true });
 
@@ -254,7 +258,7 @@ describe("the never-empty, never-throwing invariant", () => {
     expect(labels(completeKanbanCommand("T-0", board))).toEqual(SUBCOMMAND_LABELS);
   });
 
-  it("returns the 8 subcommands for a board with zero tasks", () => {
+  it("returns the 6 subcommands for a board with zero tasks", () => {
     const board = makeBoard(WORKFLOW);
     expect(labels(completeKanbanCommand("", board))).toEqual(SUBCOMMAND_LABELS);
   });
@@ -269,7 +273,7 @@ describe("the never-empty, never-throwing invariant", () => {
     for (const item of items) expect(item.description).not.toContain("could not be read");
   });
 
-  it("returns the 8 subcommands when every task file is unreadable", () => {
+  it("returns the 6 subcommands when every task file is unreadable", () => {
     const board = makeBoard(WORKFLOW);
     taskFile(board, "T-0001", "garbage\n");
     taskFile(board, "T-0002", "---\nid: T-0002\n---\n");

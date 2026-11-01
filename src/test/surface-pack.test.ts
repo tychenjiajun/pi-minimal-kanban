@@ -213,7 +213,8 @@ describe("claim wording names the age everywhere", () => {
     // An assignment is not a claim, and the warning says why it still matters.
     expect(stale?.message).toContain('Assigned to "coder-1" for 3d (threshold 24h)');
     expect(stale?.message).toContain("blocks moving the task into an active status");
-    expect(stale?.message).toContain("/kanban release T-0001 --yes.");
+    expect(stale?.message).toContain("Release it with kanban_assign {assignee: null, force: true}.");
+    expect(stale?.message).not.toContain("/kanban release");
     expect(report.ok).toBe(true);
   });
 
@@ -244,7 +245,7 @@ describe("claim wording names the age everywhere", () => {
     expect(stale?.message).toContain('Claimed by "coder-1" for 3d (threshold 24h). Release it');
   });
 
-  it("prints the raw status in a release refusal", async () => {
+  it("treats a release attempt as an unknown task id and writes nothing", async () => {
     const board = makeBoard();
     // A status the workflow no longer declares, and no assignee.
     taskFile(
@@ -255,8 +256,8 @@ describe("claim wording names the age everywhere", () => {
     const { ctx, messages } = ctxFor(board.root);
     await handleKanbanCommand("release T-0001", ctx);
 
-    expect(messages[0]).toContain("T-0001 has no claim to release.");
-    expect(messages[0]).toContain("  status  legacy\n");
+    // The subcommand no longer exists, so `release` is parsed as a task id.
+    expect(messages[0]).toBe('Invalid task id "release".\n\nUse the form T-0001.');
     expect(messages[0]).not.toContain("⚠");
   });
 });
@@ -399,9 +400,14 @@ describe("/kanban help is the finished 14-line card", () => {
     expect(USAGE).toContain("Start with kanban_list");
   });
 
-  it("names repair-ids only in its usage line, not as a second paragraph", () => {
-    const lines = USAGE.split("\n").filter((line) => line.includes("repair-ids"));
-    expect(lines).toEqual(["       /kanban repair-ids [--dry-run | --yes] [--as <handle>]"]);
+  it("names neither removed subcommand: release and repair-ids live in the tools", () => {
+    // 0.4.0 made `/kanban` inspection-only. Both mutating subcommands are gone
+    // from the parser, the completions, and the help card. Only the removal
+    // line ` A terminal status releases the claim` may still contain the word.
+    expect(USAGE).not.toContain("repair-ids");
+    const invocations = USAGE.split("\n").filter((line) => line.includes("/kanban release") || line.includes("/kanban repair-ids"));
+    expect(invocations).toEqual([]);
+    expect(USAGE).toContain("This command only reads");
   });
 
   it("prints the block unchanged for `help` and `--help`", async () => {

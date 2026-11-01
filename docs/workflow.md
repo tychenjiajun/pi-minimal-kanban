@@ -84,7 +84,7 @@ claims the task for the caller, and moving out of one while somebody else holds
 the claim requires `force`. While a claim lasts, its age is shown next to the
 assignee, and `/kanban validate` warns once it is older than the stale threshold
 (24 h by default). A claim never expires on its own; release it with
-`/kanban release <id> --yes` or `kanban_assign {assignee: null, force: true}`.
+`kanban_assign {task: "T-0003", assignee: null, force: true}`.
 
 `terminal` marks finished work. Entering it clears the assignee, and a terminal
 task cannot be assigned until it is moved back.
@@ -106,35 +106,29 @@ assignee is the caller. ADR: `docs/adr/0009-third-party-assignment-is-forced.md`
 ## Repairing task ids after a merge
 
 Boards are committed, so a `counter.json` merge conflict is resolved by hand
-(ADR 0005). Two things can come out of that, and without a repair path nothing
-but a hand edit fixes them: a task file whose frontmatter `id` no longer matches
-its filename (`/kanban validate` reports `id_mismatch`), and a counter that is
-not greater than the highest existing id (`counter_low`).
+(ADR 0005). Two things can come out of that: a task file whose frontmatter `id`
+no longer matches its filename (`/kanban validate` reports `id_mismatch`), and a
+counter that is not greater than the highest existing id (`counter_low`).
 
-`/kanban repair-ids` fixes exactly those two codes and nothing else.
+`/kanban` reports both and writes neither: the command is read-only, and
+`/kanban repair-ids` is no longer exposed. The fix is a hand edit that follows
+the same rules the command used:
 
-- **The filename is the identity.** A file whose frontmatter declares
-  `id: T-0009` is renamed to `T-0009.md`; the reverse repair is refused, because
-  ADR 0005 makes an issued id permanent and overwriting it would discard an id
-  that can never be reissued.
-- **The counter only goes up.** It is raised to `highest + 1` when it is at or
-  below the highest id, and otherwise left byte-identical.
-- **The plan is re-computed under the board lock.** `--yes` does not apply the
-  plan it printed; it takes the lock, re-plans, and applies that.
-- **Two rename passes.** Sources move to `.repair.<token>.md` first, then to
-  their targets, so a swap (`T-0002 -> T-0005` with `T-0005 -> T-0002`) and a
-  chain both apply without colliding. A crash between the passes leaves no task
-  with a wrong id, only a file no tool reads — and the next run lists it as
-  `interrupted repair: restore or delete by hand`.
-- **Prose is never rewritten.** A `T-0007` in a description or a comment stays
-  as written. Neither are `rev`, `updated`, or the history: a rename is not
-  task activity.
-- **Ambiguity is refused.** `--dry-run --yes` together, two files declaring one
-  id, and a target that already exists all print a refusal and write nothing. A
-  file with no string `id` is skipped and listed, and the rest still applies.
+- **The filename is the identity.** Rename the file to the id its frontmatter
+  declares (`id: T-0009` -> `T-0009.md`). Never edit the id to match the
+  filename: ADR 0005 makes an issued id permanent, so the reverse repair would
+  discard an id that can never be reissued.
+- **The counter only goes up.** Raise `counter.json` to `highest + 1` when it is
+  at or below the highest id, and otherwise leave it byte-identical.
+- **Prose is never rewritten.** A `T-0007` mentioned in a description or a
+  comment stays as written, and so do `rev`, `updated`, and the history: a
+  rename is not task activity.
+- **Do it while nobody is writing.** A hand edit does not take the board lock, so
+  make it when no agent holds a claim, and run `/kanban validate` afterwards.
 
 Nothing here fixes `drifted`, `terminal_assigned`, `stale_claim`,
-`unannotated_forced`, or an unreadable task file.
+`unannotated_forced`, or an unreadable task file: those are reported by
+`/kanban validate` and resolved by the call that owns them, not by an id rename.
 
 ## Takeovers and their reasons
 

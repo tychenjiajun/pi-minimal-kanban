@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.4.0 — `/kanban` reads, the tools write
+
+2026-11-01. The command surface loses its last two mutating subcommands, so
+`/kanban` can never change the board; the package grows a skill and a standup
+prompt. No new runtime dependency.
+
+### Changed
+
+- **`/kanban` is inspection-only.** `release` and `repair-ids` are gone from the
+  command, its usage card, its tab completion, and the docs. Every remaining
+  subcommand — the board, `<id>`, `status`, `mine`, `validate`, `init`, `help`,
+  `--json`, `--all`, `--stale` — only reads. The five tools stay the whole
+  mutation surface, so a session can render the board in a review, a demo, or a
+  read-only context without any path that writes.
+- **The help card says where writes live.** `/kanban help` still fits 14 lines: it
+  now states that the command only reads and that the `kanban_*` tools change the
+  board, including the exact call that clears a claim.
+- **`docs/workflow.md` makes id repair a hand edit.** `id_mismatch` and
+  `counter_low` are still reported by `/kanban validate`; the rules for fixing
+  them (filename is the identity, the counter only goes up, prose is never
+  rewritten) are stated for the hand edit that replaces `repair-ids`.
+
+### Added
+
+- **A kanban skill.** `skills/kanban/SKILL.md` plus `skills/kanban/references/`
+  ships the working agreement: how to read the board, claim a task, hand it over
+  with a `reason`, and recover a drifted board. Installed with the package and
+  discovered from the conventional `skills/` directory.
+- **A `/standup` prompt template.** `prompts/standup.md` reads the board and
+  reports what each handle holds, what has gone stale, and what is waiting.
+- **Both ship.** `files` in `package.json` now includes `skills/**` and
+  `prompts/**`, and `pi.skills` / `pi.prompts` point at the conventional paths.
+
+### Compatibility
+
+- **`/kanban release <id> [--yes]` no longer exists** — a breaking change for
+  anyone who used the command as a shortcut. One-line migration: call
+  `kanban_assign {task: "<id>", assignee: null, force: true}` instead. It does
+  what `release` did (clears the claim, records the unassignment, bumps `rev`),
+  takes the board lock, and is available to agents and humans alike.
+- **`/kanban repair-ids` is no longer exposed.** The `id_mismatch` and
+  `counter_low` codes are still reported, but repair is a hand edit under the
+  rules in `docs/workflow.md`. No board is rewritten by upgrading: a task whose
+  frontmatter id disagrees with its filename stays exactly as it is until someone
+  renames it.
+- **Boards are unchanged.** No schema, history entry, or `rev` semantics move in
+  0.4.0; the tool surface and the on-disk format are the 0.3.0 ones.
+
 ## 0.3.0 — legible takeovers
 
 2026-11-01. A takeover now leaves a readable trace, assigning a task to a handle
