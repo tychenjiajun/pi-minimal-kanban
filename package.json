@@ -68,14 +68,14 @@
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
-    "@sinclair/typebox": "*"
+    "typebox": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^1.5.0",
-    "@sinclair/typebox": "^0.34.52",
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.6.6",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "^5.1.0",
+    "typebox": "^1.4.5"
   },
   "packageManager": "pnpm@12.6.0"
 }

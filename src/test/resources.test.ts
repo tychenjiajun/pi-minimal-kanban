@@ -153,8 +153,12 @@ describe("package.json ships the resources", () => {
     pkg = JSON.parse(read("package.json")) as typeof pkg;
   });
 
-  it("is version 0.5.0", () => {
-    expect(pkg.version).toBe("0.5.0");
+  it("matches the newest CHANGELOG entry", () => {
+    // Pinning a literal version here breaks every release; the invariant that
+    // matters is package.json and the changelog agreeing on the newest entry.
+    const heading = read("CHANGELOG.md").match(/^## (\d+\.\d+\.\d+)/m);
+    expect(heading?.[1]).toBeDefined();
+    expect(pkg.version).toBe(heading?.[1]);
   });
 
   it("ships every prompt file the glob will discover", () => {

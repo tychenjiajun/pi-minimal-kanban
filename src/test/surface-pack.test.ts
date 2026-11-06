@@ -4,7 +4,7 @@
  * claim wording outside an active status, and the §2 row everywhere.
  */
 import { describe, expect, it } from "vitest";
-import { Value } from "@sinclair/typebox/value";
+import { Value } from "typebox/value";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
@@ -150,7 +150,11 @@ describe("limit is 500 everywhere", () => {
   it("accepts 500 in the schema instead of rejecting it before the clamp", () => {
     expect(Value.Check(ListParams, { limit: 500 })).toBe(true);
     expect(Value.Check(ListParams, { limit: 501 })).toBe(false);
-    expect(ListParams.properties.limit.description).toContain("max 500");
+    // Read the serialized schema: that is exactly what pi 1.5.0 validates, and
+    // typebox v1 keeps the description on the wrapped `TOptional`, not on the
+    // property's top-level type.
+    const limit = JSON.parse(JSON.stringify(ListParams)).properties.limit as { description: string };
+    expect(limit.description).toContain("max 500");
   });
 
   it("prints 500 rows and pages the remainder", async () => {
