@@ -1,6 +1,6 @@
 {
   "name": "pi-minimal-kanban",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "author": "Jiajun Chen <tychenjiajun@live.cn>",
   "type": "module",
   "description": "Minimal file-backed Kanban for Pi agents: project-specific workflows, exclusive task claims, and a /kanban board view.",
@@ -71,7 +71,7 @@
     "@sinclair/typebox": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^1.4.0",
+    "@earendil-works/pi-coding-agent": "^1.5.0",
     "@sinclair/typebox": "^0.34.52",
     "@types/node": "^22.10.0",
     "typescript": "^7.0.2",

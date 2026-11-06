@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.1 — built and tested against pi 1.5.0
+
+2026-11-06. Compatibility release: no tool, workflow, or on-disk change.
+
+### Compatibility
+
+- **pi 1.5.0 validates tool arguments as JSON Schema.** The kanban tools use
+  plain `@sinclair/typebox` schemas with no refinements, codecs, or `BigInt`,
+  so validation, coercion, and error messages keep working unchanged.
+- **Dev dependency** `@earendil-works/pi-coding-agent` 1.4.0 → 1.5.0;
+  `pnpm typecheck` and all 277 vitest cases pass against it.
+
 ## 0.5.0 — set up, review, stand up
 
 2026-11-03. Two more atomic prompt templates ship beside the extension, so a
