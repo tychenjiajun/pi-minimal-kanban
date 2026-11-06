@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.2 — typebox v1, newer toolchain
+
+2026-11-06. Dependency release: no tool, workflow, or on-disk change.
+
+### Changed
+
+- **Schemas are built with `typebox` v1.** pi 1.5.0 validates tool arguments as
+  JSON Schema and aliases legacy `@sinclair/typebox` imports to its own bundled
+  `typebox` v1, so the 0.34 dev dependency described a different library than
+  the one that runs. `src/schemas.ts` and the surface-pack test now import
+  `typebox` (peer `typebox`, dev `^1.4.5`), and the emitted schemas are byte
+  for byte the ones 0.34 produced.
+- **Dev dependencies:** `vitest` 5.1.0, `@types/node` 26.6.6.
+
+### Fixed
+
+- **`src/test/resources.test.ts` no longer pins a literal version.** It now
+  asserts `package.json` and the newest `CHANGELOG.md` heading agree, so a
+  release bump cannot fail the suite (0.5.1 shipped with that test red).
+
 ## 0.5.1 — built and tested against pi 1.5.0
 
 2026-11-06. Compatibility release: no tool, workflow, or on-disk change.
