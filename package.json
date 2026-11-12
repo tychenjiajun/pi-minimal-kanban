@@ -64,18 +64,18 @@
     "node": ">=22.19.0"
   },
   "dependencies": {
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.1"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "typebox": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^1.5.0",
+    "@earendil-works/pi-coding-agent": "^1.5.2",
     "@types/node": "^26.6.6",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0",
-    "typebox": "^1.4.5"
+    "typebox": "^1.4.6"
   },
   "packageManager": "pnpm@12.6.0"
 }
