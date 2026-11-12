@@ -1,6 +1,6 @@
 {
   "name": "pi-minimal-kanban",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "author": "Jiajun Chen <tychenjiajun@live.cn>",
   "type": "module",
   "description": "Minimal file-backed Kanban for Pi agents: project-specific workflows, exclusive task claims, and a /kanban board view.",

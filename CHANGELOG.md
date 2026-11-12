@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.3 — built and tested against pi 1.5.2
+
+2026-11-12. Dependency release: no tool, workflow, or on-disk change.
+
+### Changed
+
+- **Dev dependency** `@earendil-works/pi-coding-agent` 1.5.0 → 1.5.2;
+  `pnpm typecheck` and all 277 vitest cases pass against it.
+- **`typebox`** dev dependency 1.4.5 → 1.4.6, and `yaml` 2.9.0 → 2.9.1.
+
 ## 0.5.2 — typebox v1, newer toolchain
 
 2026-11-06. Dependency release: no tool, workflow, or on-disk change.
