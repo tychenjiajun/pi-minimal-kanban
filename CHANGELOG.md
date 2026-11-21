@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.4 — built and tested against pi 1.6.0
+
+2026-11-20. Dependency release: no tool, workflow, or on-disk change.
+
+### Changed
+
+- **Dev dependency** `@earendil-works/pi-coding-agent` 1.5.2 → 1.6.0;
+  `pnpm typecheck` and all 277 vitest cases pass against it. pi 1.6.0 makes
+  `Component.render()` return `readonly string[]`; the kanban tools return plain
+  text, so the change does not reach them.
+- **`typebox`** dev dependency 1.4.6 → 1.4.7, and `vitest` 5.1.0 → 5.1.1.
+
 ## 0.5.3 — built and tested against pi 1.5.2
 
 2026-11-12. Dependency release: no tool, workflow, or on-disk change.
